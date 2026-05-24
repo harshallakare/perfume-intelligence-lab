@@ -47,12 +47,21 @@ fi
 if [[ "$SETUP" == true ]]; then
   info "=== FIRST-TIME SETUP ==="
 
-  # ── Guard: app code must already be present ───────────────────────────────
+  # ── Guard: app code must be present — auto-copy if running from the repo ──
   if [[ ! -f "$APP_DIR/package.json" ]]; then
-    error "App code not found at $APP_DIR/package.json.
-    Upload your code first, then re-run this script:
-      scp -r ./frontend user@this-server:$(dirname "$APP_DIR")/
-    or manually copy the frontend/ folder to $APP_DIR"
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    if [[ -f "$SCRIPT_DIR/frontend/package.json" ]]; then
+      info "Found frontend/ next to this script — copying to $APP_DIR..."
+      sudo mkdir -p "$APP_DIR"
+      sudo cp -r "$SCRIPT_DIR/frontend/." "$APP_DIR/"
+      success "Code copied to $APP_DIR"
+    else
+      error "App code not found. Either:
+  1. Run this script from inside the extracted repo folder (where frontend/ lives), OR
+  2. Copy the frontend/ folder to $APP_DIR manually before running --setup"
+    fi
+  else
+    success "App code found at $APP_DIR"
   fi
 
   # ── System packages ──────────────────────────────────────────────────────────
