@@ -1,0 +1,252 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// ─── Enums (stored as strings in SQLite) ──────────────────────────────────────
+
+enum MaterialTypeEnum {
+  aroma_chemical
+  essential_oil
+  absolute
+  natural_extract
+  fixative
+  alcohol
+  dpg
+  ipm
+  tec
+  musk
+  aldehyde
+  perfume_base
+  solvent
+  other
+}
+
+enum OdorFamilyEnum {
+  floral
+  oriental
+  woody
+  fresh
+  citrus
+  aquatic
+  gourmand
+  fougere
+  chypre
+  leather
+  tobacco
+  musk
+  animalic
+  green
+  herbal
+  spicy
+  amber
+  powdery
+  aldehyic
+  fruity
+}
+
+enum ConcentrationTypeEnum {
+  edt
+  edp
+  parfum
+  extrait
+  attar
+  cologne
+  body_spray
+  oil_blend
+}
+
+enum FormulaSectionEnum {
+  top_note
+  middle_note
+  base_note
+  modifier
+  trace_molecule
+}
+
+enum FormulaStatusEnum {
+  draft
+  under_review
+  approved
+  locked
+  deprecated
+}
+
+enum ProductionStatusEnum {
+  draft
+  scheduled
+  in_progress
+  macerating
+  quality_check
+  completed
+  rejected
+  cancelled
+}
+
+// ─── Models ───────────────────────────────────────────────────────────────────
+
+model Organization {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  plan        String   @default("pro")
+  isActive    Boolean  @default(true)  @map("is_active")
+  settings    String   @default("{}")   // JSON string
+  createdAt   DateTime @default(now())  @map("created_at")
+  updatedAt   DateTime @updatedAt       @map("updated_at")
+
+  rawMaterials    RawMaterial[]
+  formulas        Formula[]
+  productions     ProductionOrder[]
+  notifications   Notification[]
+
+  @@map("organizations")
+}
+
+model RawMaterial {
+  id                String          @id @default(cuid())
+  organizationId    String          @map("organization_id")
+  name              String
+  casNumber         String?         @map("cas_number")
+  materialType      MaterialTypeEnum @map("material_type")
+  odorFamily        OdorFamilyEnum?  @map("odor_family")
+  odorDescription   String?         @map("odor_description")
+  odorIntensity     Int?            @map("odor_intensity")
+  volatilityClass   String?         @map("volatility_class")
+  purityPercentage  Float?          @map("purity_percentage")
+  primarySupplierId String?         @map("primary_supplier_id")
+  supplierName      String?         @map("supplier_name")
+  isNatural         Boolean         @default(false) @map("is_natural")
+  isAllergen        Boolean         @default(false) @map("is_allergen")
+  isRestricted      Boolean         @default(false) @map("is_restricted")
+  ifraRestricted    Boolean         @default(false) @map("ifra_restricted")
+  unitOfMeasure     String          @default("g")   @map("unit_of_measure")
+  currentStock      Float           @default(0)     @map("current_stock")
+  minimumStock      Float           @default(0)     @map("minimum_stock")
+  costPerUnit       Float           @default(0)     @map("cost_per_unit")
+  currency          String          @default("USD")
+  storageConditions String?         @map("storage_conditions")
+  tags              String          @default("[]")  // JSON array string
+  createdAt         DateTime        @default(now()) @map("created_at")
+  updatedAt         DateTime        @updatedAt      @map("updated_at")
+
+  organization       Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  formulaIngredients FormulaIngredient[]
+
+  @@unique([organizationId, name])
+  @@map("raw_materials")
+}
+
+model Formula {
+  id                String                 @id @default(cuid())
+  organizationId    String                 @map("organization_id")
+  name              String
+  internalCode      String?                @map("internal_code")
+  concentrationType ConcentrationTypeEnum  @default(edp) @map("concentration_type")
+  status            FormulaStatusEnum      @default(draft)
+  olfactoryFamily   OdorFamilyEnum?        @map("olfactory_family")
+  genderTarget      String?                @map("gender_target")
+  description       String?
+  perfumerNotes     String?                @map("perfumer_notes")
+  totalFragrancePct Float?                 @map("total_fragrance_pct")
+  costPerMl         Float?                 @map("cost_per_ml")
+  version           Int                    @default(1)
+  isIfraCompliant   Boolean?               @map("is_ifra_compliant")
+  lockedAt          DateTime?              @map("locked_at")
+  createdAt         DateTime               @default(now()) @map("created_at")
+  updatedAt         DateTime               @updatedAt      @map("updated_at")
+
+  organization      Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  ingredients       FormulaIngredient[]
+  productions       ProductionOrder[]
+  versions          FormulaVersion[]
+
+  @@unique([organizationId, name])
+  @@map("formulas")
+}
+
+model FormulaVersion {
+  id          String   @id @default(cuid())
+  formulaId   String   @map("formula_id")
+  versionNum  Int      @map("version_num")
+  snapshot    String   // JSON — full formula state at save time
+  changeNote  String?  @map("change_note")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  formula     Formula  @relation(fields: [formulaId], references: [id], onDelete: Cascade)
+
+  @@map("formula_versions")
+}
+
+model FormulaIngredient {
+  id            String             @id @default(cuid())
+  formulaId     String             @map("formula_id")
+  rawMaterialId String             @map("raw_material_id")
+  section       FormulaSectionEnum @default(middle_note)
+  percentage    Float
+  sortOrder     Int                @default(0) @map("sort_order")
+  perfumerNotes String?            @map("perfumer_notes")
+
+  formula     Formula     @relation(fields: [formulaId], references: [id], onDelete: Cascade)
+  rawMaterial RawMaterial @relation(fields: [rawMaterialId], references: [id])
+
+  @@unique([formulaId, rawMaterialId])
+  @@map("formula_ingredients")
+}
+
+model ProductionOrder {
+  id               String              @id @default(cuid())
+  organizationId   String              @map("organization_id")
+  formulaId        String              @map("formula_id")
+  orderNumber      String              @map("order_number")
+  batchNumber      String              @map("batch_number")
+  status           ProductionStatusEnum @default(draft)
+  requestedBottles Int                 @default(0) @map("requested_bottles")
+  bottleSizeMl     Int                 @default(50) @map("bottle_size_ml")
+  plannedQtyMl     Float               @map("planned_qty_ml")
+  actualQtyMl      Float?              @map("actual_qty_ml")
+  scheduledStart   DateTime?           @map("scheduled_start")
+  macerationEndsAt DateTime?           @map("maceration_ends_at")
+  completedAt      DateTime?           @map("completed_at")
+  assignedTo       String?             @map("assigned_to")
+  qcResult         String?             @map("qc_result")
+  notes            String?
+  createdAt        DateTime            @default(now()) @map("created_at")
+  updatedAt        DateTime            @updatedAt      @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  formula      Formula      @relation(fields: [formulaId], references: [id])
+
+  @@map("production_orders")
+}
+
+model Notification {
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  type           String   // low_stock | formula_approved | production_complete | ifra_breach | system
+  title          String
+  message        String
+  link           String?
+  isRead         Boolean  @default(false) @map("is_read")
+  severity       String   @default("info") // info | warning | error | success
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
+}
+
+model UserSession {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  email     String
+  role      String   @default("admin")
+  name      String
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("user_sessions")
+}
