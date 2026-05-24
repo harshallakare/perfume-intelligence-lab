@@ -6,10 +6,13 @@
 #   First deploy:   bash deploy.sh --setup
 #   Update deploy:  bash deploy.sh
 #
+# Before running --setup, upload your code to APP_DIR manually:
+#   scp -r ./frontend user@server:/opt/pil/frontend
+#   (or git clone on the server yourself)
+#
 # Requirements on the server:
 #   - Node.js ≥ 20   (https://nodejs.org)
 #   - PM2             (npm install -g pm2)
-#   - Git
 #   - build-essential & python3  (for better-sqlite3 native module)
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -22,7 +25,6 @@ APP_PORT=3000                         # Next.js port
 APP_USER="pil"                        # Linux user that runs the app
 LOG_DIR="/var/log/pil"
 BACKUP_DIR="/opt/pil/backups"
-REPO_URL="https://github.com/harshallakare/perfume-intelligence-lab.git"
 # ─────────────────────────────────────────────────────────────────────────────
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; NC='\033[0m'
@@ -45,10 +47,18 @@ fi
 if [[ "$SETUP" == true ]]; then
   info "=== FIRST-TIME SETUP ==="
 
+  # ── Guard: app code must already be present ───────────────────────────────
+  if [[ ! -f "$APP_DIR/package.json" ]]; then
+    error "App code not found at $APP_DIR/package.json.
+    Upload your code first, then re-run this script:
+      scp -r ./frontend user@this-server:$(dirname "$APP_DIR")/
+    or manually copy the frontend/ folder to $APP_DIR"
+  fi
+
   # ── System packages ──────────────────────────────────────────────────────────
   info "Installing system dependencies..."
   sudo apt-get update -qq
-  sudo apt-get install -y curl git build-essential python3 nginx ufw
+  sudo apt-get install -y curl build-essential python3 nginx ufw
 
   # ── Node.js 20 ───────────────────────────────────────────────────────────────
   if ! command -v node &>/dev/null || [[ "$(node -v | cut -d. -f1 | tr -d 'v')" -lt 20 ]]; then
@@ -78,17 +88,7 @@ if [[ "$SETUP" == true ]]; then
   # ── Directories ───────────────────────────────────────────────────────────────
   info "Creating directories..."
   sudo mkdir -p "$(dirname "$APP_DIR")" "$LOG_DIR" "$BACKUP_DIR"
-  sudo chown "$APP_USER:$APP_USER" "$(dirname "$APP_DIR")" "$LOG_DIR" "$BACKUP_DIR"
-
-  # ── Clone repo ────────────────────────────────────────────────────────────────
-  if [[ ! -d "$APP_DIR/.git" ]]; then
-    info "Cloning repository..."
-    sudo -u "$APP_USER" git clone "$REPO_URL" "$(dirname "$APP_DIR")/repo"
-    sudo mv "$(dirname "$APP_DIR")/repo/frontend" "$APP_DIR"
-    sudo chown -R "$APP_USER:$APP_USER" "$APP_DIR"
-  else
-    success "Repository already cloned at $APP_DIR"
-  fi
+  sudo chown -R "$APP_USER:$APP_USER" "$APP_DIR" "$(dirname "$APP_DIR")" "$LOG_DIR" "$BACKUP_DIR"
 
   # ── .env.local ───────────────────────────────────────────────────────────────
   if [[ ! -f "$APP_DIR/.env.local" ]]; then
@@ -210,7 +210,7 @@ EOFNGINX
 fi
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# UPDATE MODE  (regular deploys — run after every git push)
+# UPDATE MODE  (regular deploys — run after uploading new code)
 # ═══════════════════════════════════════════════════════════════════════════════
 info "=== DEPLOYING UPDATE ==="
 cd "$APP_DIR"
@@ -222,11 +222,6 @@ if [[ -f "$APP_DIR/prisma/pil.db" ]]; then
   cp "$APP_DIR/prisma/pil.db" "$BACKUP_FILE"
   success "Database backed up"
 fi
-
-# ── Pull latest code ──────────────────────────────────────────────────────────
-info "Pulling latest code..."
-git pull origin main
-success "Code updated"
 
 # ── Install new/updated packages ──────────────────────────────────────────────
 info "Installing dependencies..."
