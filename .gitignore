@@ -24,6 +24,7 @@ frontend/prisma/pil.db-wal
 .env
 .env.*
 !.env.example
+!.env.docker.example
 
 # ── IDE / OS ─────────────────────────────────────────────────────────────────
 .DS_Store
