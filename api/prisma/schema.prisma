@@ -1,0 +1,496 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── ENUMs (must match PostgreSQL enum names exactly) ─────────────────────────
+
+enum UserRoleEnum {
+  admin
+  perfumer
+  production_manager
+  inventory_manager
+  sales
+
+  @@map("user_role_enum")
+}
+
+enum MaterialTypeEnum {
+  aroma_chemical
+  essential_oil
+  absolute
+  natural_extract
+  fixative
+  alcohol
+  dpg
+  ipm
+  tec
+  musk
+  aldehyde
+  perfume_base
+  solvent
+  other
+
+  @@map("material_type_enum")
+}
+
+enum ConcentrationTypeEnum {
+  edt
+  edp
+  parfum
+  extrait
+  attar
+  cologne
+  body_spray
+  oil_blend
+
+  @@map("concentration_type_enum")
+}
+
+enum FormulaSectionEnum {
+  top_note
+  middle_note
+  base_note
+  modifier
+  trace_molecule
+
+  @@map("formula_section_enum")
+}
+
+enum FormulaStatusEnum {
+  draft
+  under_review
+  approved
+  locked
+  deprecated
+
+  @@map("formula_status_enum")
+}
+
+enum ProductionStatusEnum {
+  draft
+  scheduled
+  in_progress
+  macerating
+  quality_check
+  completed
+  rejected
+  cancelled
+
+  @@map("production_status_enum")
+}
+
+enum OdorFamilyEnum {
+  floral
+  oriental
+  woody
+  fresh
+  citrus
+  aquatic
+  gourmand
+  fougere
+  chypre
+  leather
+  tobacco
+  musk
+  animalic
+  green
+  herbal
+  spicy
+  amber
+  powdery
+  aldehyic
+  fruity
+
+  @@map("odor_family_enum")
+}
+
+enum QcResultEnum {
+  pass
+  fail
+  conditional_pass
+  pending
+
+  @@map("qc_result_enum")
+}
+
+enum TransactionTypeEnum {
+  purchase
+  production_debit
+  adjustment_add
+  adjustment_remove
+  waste
+  return
+  transfer_in
+  transfer_out
+  expiry_disposal
+
+  @@map("transaction_type_enum")
+}
+
+enum IfraCategoryEnum {
+  cat_1
+  cat_2
+  cat_3
+  cat_4
+  cat_5a
+  cat_5b
+  cat_5c
+  cat_5d
+  cat_6
+  cat_7a
+  cat_7b
+  cat_8
+  cat_9
+  cat_10a
+  cat_10b
+  cat_11a
+  cat_11b
+  cat_12
+  cat_13
+  cat_14
+
+  @@map("ifra_category_enum")
+}
+
+// ─── Core Auth ────────────────────────────────────────────────────────────────
+
+model Organization {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String   @db.VarChar(255)
+  slug        String   @unique @db.VarChar(100)
+  plan        String   @default("starter") @db.VarChar(50)
+  isActive    Boolean  @default(true) @map("is_active")
+  maxUsers    Int      @default(5) @map("max_users")
+  maxFormulas Int      @default(100) @map("max_formulas")
+  logoUrl     String?  @map("logo_url")
+  address     Json?
+  settings    Json     @default("{}")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  users           User[]
+  roles           Role[]
+  suppliers       Supplier[]
+  rawMaterials    RawMaterial[]
+  formulas        Formula[]
+  productions     ProductionOrder[]
+  complianceChecks ComplianceCheck[]
+
+  @@map("organizations")
+}
+
+model User {
+  id              String    @id @default(uuid()) @db.Uuid
+  organizationId  String    @map("organization_id") @db.Uuid
+  email           String    @db.VarChar(320)
+  passwordHash    String    @map("password_hash")
+  fullName        String    @map("full_name") @db.VarChar(255)
+  avatarUrl       String?   @map("avatar_url")
+  isActive        Boolean   @default(true) @map("is_active")
+  isEmailVerified Boolean   @default(false) @map("is_email_verified")
+  emailVerifiedAt DateTime? @map("email_verified_at") @db.Timestamptz
+  lastLoginAt     DateTime? @map("last_login_at") @db.Timestamptz
+  preferences     Json      @default("{}")
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  organization     Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userRoles        UserRole[]
+  refreshTokens    RefreshToken[]
+  createdMaterials RawMaterial[]  @relation("MaterialCreatedBy")
+  createdFormulas  Formula[]      @relation("FormulaCreatedBy")
+
+  @@unique([organizationId, email])
+  @@map("users")
+}
+
+model Role {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  name           UserRoleEnum
+  displayName    String       @map("display_name") @db.VarChar(100)
+  description    String?
+  permissions    Json         @default("[]")
+  isSystemRole   Boolean      @default(false) @map("is_system_role")
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userRoles    UserRole[]
+
+  @@unique([organizationId, name])
+  @@map("roles")
+}
+
+model UserRole {
+  userId    String   @map("user_id") @db.Uuid
+  roleId    String   @map("role_id") @db.Uuid
+  grantedBy String?  @map("granted_by") @db.Uuid
+  grantedAt DateTime @default(now()) @map("granted_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+  @@map("user_roles")
+}
+
+model RefreshToken {
+  id         String    @id @default(uuid()) @db.Uuid
+  userId     String    @map("user_id") @db.Uuid
+  tokenHash  String    @unique @map("token_hash")
+  deviceInfo Json?     @map("device_info")
+  expiresAt  DateTime  @map("expires_at") @db.Timestamptz
+  revokedAt  DateTime? @map("revoked_at") @db.Timestamptz
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("refresh_tokens")
+}
+
+// ─── Inventory ────────────────────────────────────────────────────────────────
+
+model Supplier {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  name           String   @db.VarChar(255)
+  code           String?  @db.VarChar(50)
+  contactName    String?  @map("contact_name") @db.VarChar(255)
+  email          String?  @db.VarChar(320)
+  phone          String?  @db.VarChar(50)
+  address        Json?
+  country        String?  @db.VarChar(100)
+  currency       String   @default("USD") @db.Char(3)
+  paymentTerms   String?  @map("payment_terms") @db.VarChar(100)
+  leadTimeDays   Int?     @map("lead_time_days")
+  notes          String?
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  rawMaterials RawMaterial[]
+
+  @@unique([organizationId, name])
+  @@map("suppliers")
+}
+
+model RawMaterial {
+  id                String           @id @default(uuid()) @db.Uuid
+  organizationId    String           @map("organization_id") @db.Uuid
+  name              String           @db.VarChar(255)
+  iupacName         String?          @map("iupac_name") @db.VarChar(500)
+  casNumber         String?          @map("cas_number") @db.VarChar(20)
+  einecsNumber      String?          @map("einecs_number") @db.VarChar(20)
+  materialType      MaterialTypeEnum @map("material_type")
+  odorFamily        OdorFamilyEnum?  @map("odor_family")
+  odorDescription   String?          @map("odor_description")
+  odorIntensity     Int?             @map("odor_intensity")
+  volatilityClass   String?          @map("volatility_class") @db.Char(1)
+  diffusionStrength Int?             @map("diffusion_strength")
+  fixativeStrength  Int?             @map("fixative_strength")
+  longevityHours    Decimal?         @map("longevity_hours") @db.Decimal(5, 1)
+  primarySupplierId String?          @map("primary_supplier_id") @db.Uuid
+  originCountry     String?          @map("origin_country") @db.VarChar(100)
+  purityPercentage  Decimal?         @map("purity_percentage") @db.Decimal(5, 2)
+  isNatural         Boolean          @default(false) @map("is_natural")
+  isAllergen        Boolean          @default(false) @map("is_allergen")
+  isRestricted      Boolean          @default(false) @map("is_restricted")
+  ifraRestricted    Boolean          @default(false) @map("ifra_restricted")
+  sdsUrl            String?          @map("sds_url")
+  unitOfMeasure     String           @default("g") @map("unit_of_measure") @db.VarChar(20)
+  currentStock      Decimal          @default(0) @map("current_stock") @db.Decimal(12, 3)
+  minimumStock      Decimal          @default(0) @map("minimum_stock") @db.Decimal(12, 3)
+  reorderQuantity   Decimal?         @map("reorder_quantity") @db.Decimal(12, 3)
+  costPerUnit       Decimal          @default(0) @map("cost_per_unit") @db.Decimal(10, 4)
+  currency          String           @default("USD") @db.Char(3)
+  storageConditions String?          @map("storage_conditions") @db.VarChar(255)
+  storageLocation   String?          @map("storage_location") @db.VarChar(100)
+  color             String?          @db.VarChar(50)
+  appearance        String?          @db.VarChar(100)
+  notes             String?
+  tags              String[]
+  extraData         Json             @default("{}") @map("extra_data")
+  createdBy         String?          @map("created_by") @db.Uuid
+  createdAt         DateTime         @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt         DateTime         @updatedAt @map("updated_at") @db.Timestamptz
+
+  organization       Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  primarySupplier    Supplier?           @relation(fields: [primarySupplierId], references: [id])
+  creator            User?               @relation("MaterialCreatedBy", fields: [createdBy], references: [id])
+  formulaIngredients FormulaIngredient[]
+
+  @@unique([organizationId, name])
+  @@map("raw_materials")
+}
+
+// ─── Formulas ─────────────────────────────────────────────────────────────────
+
+model Formula {
+  id                        String                @id @default(uuid()) @db.Uuid
+  organizationId            String                @map("organization_id") @db.Uuid
+  name                      String                @db.VarChar(255)
+  internalCode              String?               @map("internal_code") @db.VarChar(100)
+  concentrationType         ConcentrationTypeEnum @default(edp) @map("concentration_type")
+  status                    FormulaStatusEnum     @default(draft)
+  olfactoryFamily           OdorFamilyEnum?       @map("olfactory_family")
+  genderTarget              String?               @map("gender_target") @db.VarChar(20)
+  seasonTarget              String?               @map("season_target") @db.VarChar(20)
+  occasionTarget            String?               @map("occasion_target") @db.VarChar(50)
+  projectionTarget          Int?                  @map("projection_target")
+  longevityTarget           Int?                  @map("longevity_target")
+  sillageTarget             Int?                  @map("sillage_target")
+  totalFragrancePct         Decimal?              @map("total_fragrance_pct") @db.Decimal(7, 4)
+  alcoholPct                Decimal?              @map("alcohol_pct") @db.Decimal(7, 4)
+  fixativePct               Decimal?              @map("fixative_pct") @db.Decimal(7, 4)
+  inspirationPerfume        String?               @map("inspiration_perfume") @db.VarChar(255)
+  inspirationBrand          String?               @map("inspiration_brand") @db.VarChar(255)
+  description               String?
+  perfumerNotes             String?               @map("perfumer_notes")
+  agingNotes                String?               @map("aging_notes")
+  recommendedMacerationDays Int?                  @map("recommended_maceration_days")
+  lockedAt                  DateTime?             @map("locked_at") @db.Timestamptz
+  lockedBy                  String?               @map("locked_by") @db.Uuid
+  createdBy                 String?               @map("created_by") @db.Uuid
+  createdAt                 DateTime              @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt                 DateTime              @updatedAt @map("updated_at") @db.Timestamptz
+
+  organization      Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  creator           User?               @relation("FormulaCreatedBy", fields: [createdBy], references: [id])
+  versions          FormulaVersion[]
+  ingredients       FormulaIngredient[]
+  productions       ProductionOrder[]
+  complianceChecks  ComplianceCheck[]
+
+  @@unique([organizationId, name])
+  @@map("formulas")
+}
+
+model FormulaVersion {
+  id            String   @id @default(uuid()) @db.Uuid
+  formulaId     String   @map("formula_id") @db.Uuid
+  versionNumber Int      @map("version_number")
+  versionLabel  String?  @map("version_label") @db.VarChar(100)
+  snapshot      Json
+  changeSummary String?  @map("change_summary")
+  createdBy     String?  @map("created_by") @db.Uuid
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  formula Formula @relation(fields: [formulaId], references: [id], onDelete: Cascade)
+
+  @@unique([formulaId, versionNumber])
+  @@map("formula_versions")
+}
+
+model FormulaIngredient {
+  id            String             @id @default(uuid()) @db.Uuid
+  formulaId     String             @map("formula_id") @db.Uuid
+  rawMaterialId String             @map("raw_material_id") @db.Uuid
+  section       FormulaSectionEnum @default(middle_note)
+  percentage    Decimal            @db.Decimal(8, 5)
+  amountGrams   Decimal?           @map("amount_grams") @db.Decimal(10, 4)
+  dilutionPct   Decimal            @default(100) @map("dilution_pct") @db.Decimal(6, 3)
+  isOptional    Boolean            @default(false) @map("is_optional")
+  sortOrder     Int                @default(0) @map("sort_order")
+  perfumerNotes String?            @map("perfumer_notes")
+
+  formula     Formula     @relation(fields: [formulaId], references: [id], onDelete: Cascade)
+  rawMaterial RawMaterial @relation(fields: [rawMaterialId], references: [id])
+
+  @@unique([formulaId, rawMaterialId])
+  @@map("formula_ingredients")
+}
+
+// ─── Production ───────────────────────────────────────────────────────────────
+
+model ProductionOrder {
+  id             String               @id @default(uuid()) @db.Uuid
+  organizationId String               @map("organization_id") @db.Uuid
+  formulaId      String               @map("formula_id") @db.Uuid
+  batchNumber    String               @map("batch_number") @db.VarChar(100)
+  status         ProductionStatusEnum @default(draft)
+  plannedQtyMl   Decimal              @map("planned_qty_ml") @db.Decimal(10, 2)
+  actualQtyMl    Decimal?             @map("actual_qty_ml") @db.Decimal(10, 2)
+  scheduledStart DateTime?            @map("scheduled_start") @db.Timestamptz
+  actualStart    DateTime?            @map("actual_start") @db.Timestamptz
+  completedAt    DateTime?            @map("completed_at") @db.Timestamptz
+  assignedTo     String?              @map("assigned_to") @db.Uuid
+  notes          String?
+  createdBy      String?              @map("created_by") @db.Uuid
+  createdAt      DateTime             @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime             @updatedAt @map("updated_at") @db.Timestamptz
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  formula      Formula      @relation(fields: [formulaId], references: [id])
+  qcLogs       ProductionQcLog[]
+
+  @@map("production_orders")
+}
+
+model ProductionQcLog {
+  id                String       @id @default(uuid()) @db.Uuid
+  productionOrderId String       @map("production_order_id") @db.Uuid
+  result            QcResultEnum @default(pending)
+  testedBy          String?      @map("tested_by") @db.Uuid
+  testedAt          DateTime?    @map("tested_at") @db.Timestamptz
+  notes             String?
+  parametersJson    Json?        @map("parameters_json")
+  createdAt         DateTime     @default(now()) @map("created_at") @db.Timestamptz
+
+  productionOrder ProductionOrder @relation(fields: [productionOrderId], references: [id], onDelete: Cascade)
+
+  @@map("production_qc_logs")
+}
+
+// ─── IFRA Compliance ──────────────────────────────────────────────────────────
+
+model IfraAmendment {
+  id            String   @id @default(uuid()) @db.Uuid
+  amendmentNo   Int      @unique @map("amendment_no")
+  title         String   @db.VarChar(255)
+  effectiveDate DateTime @map("effective_date") @db.Date
+  notes         String?
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  restrictions IfraRestriction[]
+
+  @@map("ifra_amendments")
+}
+
+model IfraRestriction {
+  id             String           @id @default(uuid()) @db.Uuid
+  amendmentId    String           @map("amendment_id") @db.Uuid
+  materialName   String           @map("material_name") @db.VarChar(255)
+  casNumber      String?          @map("cas_number") @db.VarChar(20)
+  category       IfraCategoryEnum
+  maxUsagePct    Decimal          @map("max_usage_pct") @db.Decimal(8, 5)
+  restrictionType String          @default("limit") @map("restriction_type") @db.VarChar(50)
+  notes          String?
+  createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz
+
+  amendment    IfraAmendment @relation(fields: [amendmentId], references: [id])
+
+  @@map("ifra_restrictions")
+}
+
+model ComplianceCheck {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  formulaId      String    @map("formula_id") @db.Uuid
+  amendmentId    String?   @map("amendment_id") @db.Uuid
+  category       IfraCategoryEnum
+  isCompliant    Boolean   @map("is_compliant")
+  violationsJson Json      @default("[]") @map("violations_json")
+  checkedAt      DateTime  @default(now()) @map("checked_at") @db.Timestamptz
+  checkedBy      String?   @map("checked_by") @db.Uuid
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  formula      Formula      @relation(fields: [formulaId], references: [id], onDelete: Cascade)
+
+  @@map("compliance_checks")
+}
