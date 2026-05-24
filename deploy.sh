@@ -49,7 +49,7 @@ if [[ "$SETUP" == true ]]; then
 
   # ── Guard: app code must be present — auto-copy if running from the repo ──
   if [[ ! -f "$APP_DIR/package.json" ]]; then
-    if [[ -f "./frontend/package.json" ]]; then
+    if [[ -d "./frontend" ]]; then
       info "Found frontend/ in current directory — copying to $APP_DIR..."
       sudo mkdir -p "$APP_DIR"
       sudo cp -r ./frontend/. "$APP_DIR/"
