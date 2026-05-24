@@ -98,9 +98,14 @@ if [[ "$SETUP" == true ]]; then
 
   # ── .env.local ───────────────────────────────────────────────────────────────
   if [[ ! -f "$APP_DIR/.env.local" ]]; then
-    info "Creating .env.local from example..."
-    sudo -u "$APP_USER" cp "$APP_DIR/.env.example" "$APP_DIR/.env.local"
-    success "Created $APP_DIR/.env.local — edit it if needed"
+    info "Creating .env.local..."
+    sudo -u "$APP_USER" bash -c "cat > '$APP_DIR/.env.local' << 'EOF'
+# SQLite database path (relative to project root)
+DATABASE_URL=\"file:./prisma/pil.db\"
+EOF"
+    success "Created $APP_DIR/.env.local"
+  else
+    success ".env.local already exists"
   fi
 
   # ── npm install + prisma + build ─────────────────────────────────────────────
