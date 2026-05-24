@@ -22,7 +22,7 @@ APP_PORT=3000                         # Next.js port
 APP_USER="pil"                        # Linux user that runs the app
 LOG_DIR="/var/log/pil"
 BACKUP_DIR="/opt/pil/backups"
-REPO_URL="https://github.com/YOUR_ORG/perfume-intelligence-lab.git"
+REPO_URL="https://github.com/harshallakare/perfume-intelligence-lab.git"
 # ─────────────────────────────────────────────────────────────────────────────
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; NC='\033[0m'
