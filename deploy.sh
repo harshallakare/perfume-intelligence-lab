@@ -119,7 +119,7 @@ EOF"
   sudo -u "$APP_USER" bash -c "cd $APP_DIR && npx prisma migrate deploy"
 
   info "Seeding initial data..."
-  sudo -u "$APP_USER" bash -c "cd $APP_DIR && npx tsx prisma/seed.ts" || warn "Seed failed or already seeded — continuing"
+  sudo -u "$APP_USER" bash -c "cd $APP_DIR && npx --yes tsx prisma/seed.ts" || warn "Seed failed or already seeded — continuing"
 
   info "Building Next.js..."
   sudo -u "$APP_USER" bash -c "cd $APP_DIR && npm run build"
@@ -138,7 +138,6 @@ module.exports = {
     script: "node_modules/.bin/next",
     args: "start",
     cwd: "$APP_DIR",
-    user: "$APP_USER",
     instances: 1,
     exec_mode: "fork",
     env: { NODE_ENV: "production", PORT: $APP_PORT },
