@@ -41,12 +41,17 @@ export async function POST(req: NextRequest) {
     });
 
     const res = NextResponse.json({ ok: true, name: user.name, role: user.role, email: email.toLowerCase() });
+    // Use secure cookies only when actually served over HTTPS.
+    // Checking X-Forwarded-Proto handles the Nginx reverse-proxy case.
+    const isHttps =
+      req.headers.get("x-forwarded-proto") === "https" ||
+      process.env.COOKIE_SECURE === "true";
     res.cookies.set("pil_session", token, {
       httpOnly: true,
       sameSite: "lax",
       path: "/",
       expires: expiresAt,
-      secure: process.env.NODE_ENV === "production",
+      secure: isHttps,
     });
 
     return res;
