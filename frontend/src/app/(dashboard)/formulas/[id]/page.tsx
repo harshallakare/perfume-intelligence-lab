@@ -4,7 +4,7 @@ import { useState, useEffect, use } from "react";
 import {
   ArrowLeft, FlaskConical, ShieldCheck, ShieldX, Lock, Unlock,
   History, DownloadCloud, Loader2, Edit2, AlertTriangle, CheckCircle2,
-  Clock, Package, User2, Calendar
+  Clock, Package, User2, Calendar, Trash2
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -94,8 +94,11 @@ export default function FormulaDetailPage(props: { params: Promise<{ id: string 
   const [formula, setFormula] = useState<Formula | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [updatingStatus, setUpdatingStatus] = useState(false);
-  const [activeTab, setActiveTab] = useState<"ingredients" | "history">("ingredients");
+  const [updatingStatus,  setUpdatingStatus]  = useState(false);
+  const [activeTab,       setActiveTab]       = useState<"ingredients" | "history">("ingredients");
+  const [deleteConfirm,   setDeleteConfirm]   = useState(false);
+  const [deleteLoading,   setDeleteLoading]   = useState(false);
+  const [deleteError,     setDeleteError]     = useState<string | null>(null);
 
   const load = () => {
     setLoading(true);
@@ -123,6 +126,24 @@ export default function FormulaDetailPage(props: { params: Promise<{ id: string 
       }
     } finally {
       setUpdatingStatus(false);
+    }
+  };
+
+  const handleDeleteFormula = async () => {
+    setDeleteLoading(true);
+    setDeleteError(null);
+    try {
+      const res = await fetch(`/api/formulas/${id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({ error: "Failed to delete formula" }));
+        setDeleteError(body.error ?? "Failed to delete formula");
+        return;
+      }
+      router.push("/formulas");
+    } catch {
+      setDeleteError("Failed to delete formula. Please try again.");
+    } finally {
+      setDeleteLoading(false);
     }
   };
 
@@ -256,6 +277,13 @@ export default function FormulaDetailPage(props: { params: Promise<{ id: string 
               <Unlock size={13} /> Unlock
             </button>
           )}
+          <button
+            className="btn-ghost"
+            style={{ height: 34, color: "rgba(239,68,68,0.7)", borderColor: "rgba(239,68,68,0.2)" }}
+            onClick={() => { setDeleteConfirm(true); setDeleteError(null); }}
+          >
+            <Trash2 size={13} /> Delete
+          </button>
         </div>
       </div>
 
@@ -450,6 +478,52 @@ export default function FormulaDetailPage(props: { params: Promise<{ id: string 
       </div>
 
       <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+
+      {/* Delete confirmation dialog */}
+      {deleteConfirm && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 1100, background: "rgba(0,0,0,0.75)", backdropFilter: "blur(6px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+          <div className="glass-elevated" style={{ width: "100%", maxWidth: 440 }}>
+            <div style={{ padding: "20px 24px 16px", borderBottom: "1px solid rgba(255,255,255,0.07)", display: "flex", alignItems: "center", gap: 12 }}>
+              <div style={{ width: 36, height: 36, borderRadius: 8, flexShrink: 0, background: "rgba(239,68,68,0.12)", border: "1px solid rgba(239,68,68,0.3)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <Trash2 size={16} color="#ef4444" />
+              </div>
+              <div>
+                <div style={{ fontSize: 15, fontWeight: 700, color: "#fff" }}>Delete Formula</div>
+                <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)" }}>This action cannot be undone</div>
+              </div>
+            </div>
+
+            <div style={{ padding: "18px 24px" }}>
+              <p style={{ fontSize: 13, color: "rgba(255,255,255,0.65)", lineHeight: 1.6, margin: 0 }}>
+                Are you sure you want to delete{" "}
+                <span style={{ color: "#fff", fontWeight: 600 }}>{formula.name}</span>?
+                {" "}All ingredients and version history will be permanently removed.
+              </p>
+              {deleteError && (
+                <div style={{ marginTop: 14, padding: "10px 14px", borderRadius: 8, background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.3)", display: "flex", alignItems: "flex-start", gap: 8 }}>
+                  <AlertTriangle size={14} color="#ef4444" style={{ marginTop: 1, flexShrink: 0 }} />
+                  <span style={{ fontSize: 12, color: "#fca5a5", lineHeight: 1.5 }}>{deleteError}</span>
+                </div>
+              )}
+            </div>
+
+            <div style={{ padding: "0 24px 20px", display: "flex", gap: 10, justifyContent: "flex-end" }}>
+              <button className="btn-secondary" onClick={() => { setDeleteConfirm(false); setDeleteError(null); }} disabled={deleteLoading}>
+                Cancel
+              </button>
+              <button
+                className="btn-primary"
+                style={{ background: "rgba(239,68,68,0.15)", border: "1px solid rgba(239,68,68,0.4)", color: "#ef4444" }}
+                onClick={handleDeleteFormula}
+                disabled={deleteLoading}
+              >
+                <Trash2 size={13} />
+                {deleteLoading ? "Deleting…" : "Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Plus, Search, FlaskConical, Lock, Clock, CheckCircle, AlertCircle, GitBranch, Copy, Sparkles, Loader2, Download } from "lucide-react";
+import { Plus, Search, FlaskConical, Lock, Clock, CheckCircle, AlertCircle, GitBranch, Copy, Sparkles, Loader2, Download, Trash2, AlertTriangle } from "lucide-react";
 import Link from "next/link";
 import { concentrationLabel } from "@/lib/utils";
 import { useSettings } from "@/context/settings-context";
@@ -40,6 +40,9 @@ export function FormulasContent() {
   const [conFilter, setConFilter] = useState("All");
   const [formulas, setFormulas] = useState<FormulaCard[]>([]);
   const [loading, setLoading] = useState(true);
+  const [deleteTarget,  setDeleteTarget]  = useState<FormulaCard | null>(null);
+  const [deleteError,   setDeleteError]   = useState<string | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   useEffect(() => {
     fetch("/api/formulas")
@@ -48,6 +51,26 @@ export function FormulasContent() {
       .catch(console.error)
       .finally(() => setLoading(false));
   }, []);
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleteLoading(true);
+    setDeleteError(null);
+    try {
+      const res = await fetch(`/api/formulas/${deleteTarget.id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({ error: "Failed to delete formula" }));
+        setDeleteError(body.error ?? "Failed to delete formula");
+        return;
+      }
+      setFormulas((fs) => fs.filter((f) => f.id !== deleteTarget.id));
+      setDeleteTarget(null);
+    } catch {
+      setDeleteError("Failed to delete formula. Please try again.");
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -224,6 +247,14 @@ export function FormulasContent() {
                     <button className="btn-ghost" style={{ padding: "3px 8px", fontSize: 12 }}>
                       <Copy size={12} /> Clone
                     </button>
+                    <button
+                      className="btn-ghost"
+                      style={{ padding: "3px 8px", fontSize: 12, color: "rgba(239,68,68,0.6)" }}
+                      title="Delete formula"
+                      onClick={(e) => { e.preventDefault(); setDeleteTarget(f); setDeleteError(null); }}
+                    >
+                      <Trash2 size={12} />
+                    </button>
                   </div>
                 </div>
               </div>
@@ -236,6 +267,57 @@ export function FormulasContent() {
         <div style={{ textAlign: "center", padding: "60px 24px", color: "rgba(255,255,255,0.35)" }}>
           <FlaskConical size={36} style={{ margin: "0 auto 12px", opacity: 0.4 }} />
           <div>No formulas match your filters</div>
+        </div>
+      )}
+
+      {/* Delete confirmation dialog */}
+      {deleteTarget && (
+        <div style={{
+          position: "fixed", inset: 0, zIndex: 1100,
+          background: "rgba(0,0,0,0.75)", backdropFilter: "blur(6px)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          padding: 24,
+        }}>
+          <div className="glass-elevated" style={{ width: "100%", maxWidth: 440 }}>
+            <div style={{ padding: "20px 24px 16px", borderBottom: "1px solid rgba(255,255,255,0.07)", display: "flex", alignItems: "center", gap: 12 }}>
+              <div style={{ width: 36, height: 36, borderRadius: 8, flexShrink: 0, background: "rgba(239,68,68,0.12)", border: "1px solid rgba(239,68,68,0.3)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <Trash2 size={16} color="#ef4444" />
+              </div>
+              <div>
+                <div style={{ fontSize: 15, fontWeight: 700, color: "#fff" }}>Delete Formula</div>
+                <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)" }}>This action cannot be undone</div>
+              </div>
+            </div>
+
+            <div style={{ padding: "18px 24px" }}>
+              <p style={{ fontSize: 13, color: "rgba(255,255,255,0.65)", lineHeight: 1.6, margin: 0 }}>
+                Are you sure you want to delete{" "}
+                <span style={{ color: "#fff", fontWeight: 600 }}>{deleteTarget.name}</span>?
+                {" "}All ingredients and version history will be permanently removed.
+              </p>
+              {deleteError && (
+                <div style={{ marginTop: 14, padding: "10px 14px", borderRadius: 8, background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.3)", display: "flex", alignItems: "flex-start", gap: 8 }}>
+                  <AlertTriangle size={14} color="#ef4444" style={{ marginTop: 1, flexShrink: 0 }} />
+                  <span style={{ fontSize: 12, color: "#fca5a5", lineHeight: 1.5 }}>{deleteError}</span>
+                </div>
+              )}
+            </div>
+
+            <div style={{ padding: "0 24px 20px", display: "flex", gap: 10, justifyContent: "flex-end" }}>
+              <button className="btn-secondary" onClick={() => { setDeleteTarget(null); setDeleteError(null); }} disabled={deleteLoading}>
+                Cancel
+              </button>
+              <button
+                className="btn-primary"
+                style={{ background: "rgba(239,68,68,0.15)", border: "1px solid rgba(239,68,68,0.4)", color: "#ef4444" }}
+                onClick={handleDelete}
+                disabled={deleteLoading}
+              >
+                <Trash2 size={13} />
+                {deleteLoading ? "Deleting…" : "Delete"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
