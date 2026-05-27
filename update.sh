@@ -111,7 +111,7 @@ run_as_app "npx prisma migrate deploy"
 success "Migrations applied"
 
 info "Seeding reference data (skipped if already present)..."
-run_as_app "npm run db:seed"
+run_as_app "npx --yes tsx prisma/seed.ts"
 success "Seed complete"
 
 # ── 8. Build Next.js ──────────────────────────────────────────────────────────
