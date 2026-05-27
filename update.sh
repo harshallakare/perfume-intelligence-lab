@@ -115,13 +115,12 @@ run_as_app "npx --yes tsx prisma/seed.ts"
 success "Seed complete"
 
 # ── Library data (INSERT OR IGNORE — safe to re-run) ──────────────────────────
-if [[ -f "$APP_DIR/scripts/library_seed.sql" ]]; then
-  info "Applying perfume library data (INSERT OR IGNORE)..."
-  sqlite3 "$APP_DIR/prisma/pil.db" < "$APP_DIR/scripts/library_seed.sql"
-  COUNT=$(sqlite3 "$APP_DIR/prisma/pil.db" "SELECT COUNT(*) FROM perfume_references;")
-  success "Library ready — $COUNT entries in DB"
+if [[ -f "$APP_DIR/scripts/apply-library.js" ]]; then
+  info "Applying perfume library data..."
+  run_as_app "node scripts/apply-library.js"
+  success "Library import complete"
 else
-  warn "scripts/library_seed.sql not found — skipping library import"
+  warn "scripts/apply-library.js not found — skipping library import"
 fi
 
 # ── 8. Build Next.js ──────────────────────────────────────────────────────────
