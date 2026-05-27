@@ -250,3 +250,29 @@ model UserSession {
 
   @@map("user_sessions")
 }
+
+model PerfumeReference {
+  id              String   @id @default(cuid())
+  name            String
+  brand           String
+  perfumer        String?
+  year            Int?
+  concentration   String?                       // edt, edp, parfum, extrait, attar, cologne
+  category        String   @default("designer") // designer, niche, arabic, attar, indian
+  olfactoryFamily String?  @map("olfactory_family")
+  genderTarget    String?  @map("gender_target") // masculine, feminine, unisex
+  topNotes        String   @default("[]") @map("top_notes")    // JSON array string
+  middleNotes     String   @default("[]") @map("middle_notes") // JSON array string
+  baseNotes       String   @default("[]") @map("base_notes")   // JSON array string
+  projection      Float?
+  longevityHrs    Float?   @map("longevity_hrs")
+  season          String?  // spring, summer, fall, winter, all
+  occasion        String?  // casual, business, evening, special
+  priceTier       String?  @map("price_tier")   // budget, mid, premium, luxury, ultra
+  description     String?
+  communityScore  Float?   @map("community_score")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt      @map("updated_at")
+
+  @@map("perfume_references")
+}
