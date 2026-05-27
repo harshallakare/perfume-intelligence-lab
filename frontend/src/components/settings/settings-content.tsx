@@ -8,6 +8,7 @@ import {
   Key, Globe, Clock, DollarSign, Mail, Smartphone, Webhook, RefreshCw,
   Copy, FlaskConical, Lock, Database, Server, Wifi, WifiOff,
   Terminal, Loader2, RotateCcw, ShieldAlert, ChevronDown,
+  Download, Upload, HardDrive,
 } from "lucide-react";
 
 /* ─── section registry ──────────────────────────────────────────────── */
@@ -943,6 +944,13 @@ function DatabaseSection() {
   const [showLogs,      setShowLogs]      = useState(false);
   const [confirmReset,  setConfirmReset]  = useState(false);
 
+  // ── Backup / Restore state
+  const [backupStatus,   setBackupStatus]   = useState<OpStatus>("idle");
+  const [restoreStatus,  setRestoreStatus]  = useState<OpStatus>("idle");
+  const [restoreMsg,     setRestoreMsg]     = useState("");
+  const [restoreFile,    setRestoreFile]    = useState<File | null>(null);
+  const [confirmRestore, setConfirmRestore] = useState(false);
+
   const isSqlite = dbType === "sqlite";
 
   // Switch DB type → reset port
@@ -1034,6 +1042,58 @@ function DatabaseSection() {
       setSeedStatus("fail");
       addLog(`✗ ${err.message}`, "err");
     }
+  };
+
+  // ── Download backup
+  const downloadBackup = async () => {
+    setBackupStatus("running");
+    addLog("Requesting database backup…");
+    try {
+      const res = await fetch("/api/db/backup");
+      if (!res.ok) throw new Error("Backup request failed");
+      const blob = await res.blob();
+      const ts = new Date().toISOString().slice(0, 19).replace(/:/g, "-");
+      const filename = `pil_backup_${ts}.db`;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = filename; a.click();
+      URL.revokeObjectURL(url);
+      setBackupStatus("done");
+      addLog(`✓ Backup downloaded: ${filename}`, "ok");
+      setTimeout(() => setBackupStatus("idle"), 3000);
+    } catch (err: any) {
+      setBackupStatus("fail");
+      addLog(`✗ Backup failed: ${err.message}`, "err");
+    }
+  };
+
+  // ── Upload restore
+  const restoreDb = async () => {
+    if (!restoreFile) return;
+    setRestoreStatus("running");
+    setShowLogs(true);
+    addLog(`Uploading ${restoreFile.name} for restore…`);
+    try {
+      const form = new FormData();
+      form.append("file", restoreFile);
+      const res = await fetch("/api/db/restore", { method: "POST", body: form });
+      const data = await res.json();
+      if (data.ok) {
+        setRestoreStatus("done");
+        setRestoreMsg(data.message);
+        addLog(`✓ ${data.message}`, "ok");
+      } else {
+        setRestoreStatus("fail");
+        setRestoreMsg(data.error);
+        addLog(`✗ ${data.error}`, "err");
+      }
+    } catch (err: any) {
+      setRestoreStatus("fail");
+      setRestoreMsg(err.message);
+      addLog(`✗ ${err.message}`, "err");
+    }
+    setRestoreFile(null);
+    setConfirmRestore(false);
   };
 
   // ── Helpers
@@ -1332,6 +1392,146 @@ function DatabaseSection() {
           )}
         </SectionCard>
       )}
+
+      {/* ── Backup & Restore ── */}
+      <SectionCard title="Backup & Restore">
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+
+          {/* Backup */}
+          <div style={{
+            display: "flex", alignItems: "flex-start", gap: 16, padding: 16,
+            borderRadius: 10, background: "rgba(255,255,255,0.02)",
+            border: "1px solid rgba(255,255,255,0.07)",
+          }}>
+            <div style={{
+              width: 36, height: 36, borderRadius: 8, flexShrink: 0,
+              background: "rgba(201,168,76,0.1)", border: "1px solid rgba(201,168,76,0.2)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}>
+              <HardDrive size={16} color="#c9a84c" />
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: "#fff", marginBottom: 2 }}>
+                Download Backup
+              </div>
+              <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", marginBottom: 10 }}>
+                Downloads the current <code style={{ color: "#c9a84c", fontSize: 11 }}>pil.db</code> SQLite
+                file to your computer. Filename includes a timestamp.
+                Store it somewhere safe — this is your full data snapshot.
+              </div>
+              <button
+                className="btn-secondary"
+                onClick={downloadBackup}
+                disabled={backupStatus === "running"}
+                style={{ fontSize: 12, color: opColor(backupStatus) }}
+              >
+                {backupStatus === "running"
+                  ? <><Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} /> Preparing…</>
+                  : backupStatus === "done"
+                    ? <><Check size={13} /> Downloaded!</>
+                    : <><Download size={13} /> Download Backup</>}
+              </button>
+            </div>
+          </div>
+
+          {/* Restore */}
+          <div style={{
+            display: "flex", alignItems: "flex-start", gap: 16, padding: 16,
+            borderRadius: 10, background: "rgba(255,255,255,0.02)",
+            border: `1px solid ${restoreStatus === "fail" ? "rgba(239,68,68,0.3)" : "rgba(255,255,255,0.07)"}`,
+          }}>
+            <div style={{
+              width: 36, height: 36, borderRadius: 8, flexShrink: 0,
+              background: "rgba(96,165,250,0.1)", border: "1px solid rgba(96,165,250,0.2)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}>
+              <Upload size={16} color="#60a5fa" />
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: "#fff", marginBottom: 2 }}>
+                Restore from Backup
+              </div>
+              <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", marginBottom: 10 }}>
+                Upload a <code style={{ color: "#c9a84c", fontSize: 11 }}>.db</code> backup file to replace
+                the current database. The existing database is auto-saved on the server before replacement.
+              </div>
+
+              {/* File picker */}
+              {!confirmRestore && (
+                <label style={{ display: "inline-flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+                  <input
+                    type="file"
+                    accept=".db"
+                    style={{ display: "none" }}
+                    onChange={e => {
+                      const f = e.target.files?.[0] ?? null;
+                      setRestoreFile(f);
+                      setRestoreStatus("idle");
+                      setRestoreMsg("");
+                      if (f) setConfirmRestore(true);
+                    }}
+                  />
+                  <span className="btn-secondary" style={{ fontSize: 12, pointerEvents: "none" }}>
+                    <Upload size={13} /> Choose .db File
+                  </span>
+                </label>
+              )}
+
+              {/* Confirm step */}
+              {confirmRestore && restoreFile && (
+                <div style={{
+                  padding: "12px 14px", borderRadius: 8, marginTop: 8,
+                  background: "rgba(239,68,68,0.06)", border: "1px solid rgba(239,68,68,0.25)",
+                }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: "#fca5a5", marginBottom: 8 }}>
+                    ⚠ Replace current database with <strong>{restoreFile.name}</strong>?
+                  </div>
+                  <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", marginBottom: 10 }}>
+                    All current data will be replaced. This cannot be undone from the UI
+                    (the server keeps an auto-backup of the replaced file).
+                  </div>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button
+                      className="btn-danger" style={{ fontSize: 12 }}
+                      onClick={restoreDb}
+                      disabled={restoreStatus === "running"}
+                    >
+                      {restoreStatus === "running"
+                        ? <><Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} /> Restoring…</>
+                        : <><Upload size={13} /> Yes, Restore</>}
+                    </button>
+                    <button className="btn-ghost" style={{ fontSize: 12 }}
+                      onClick={() => { setConfirmRestore(false); setRestoreFile(null); }}>
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Result messages */}
+              {restoreStatus === "done" && restoreMsg && (
+                <div style={{
+                  marginTop: 8, padding: "8px 12px", borderRadius: 8, fontSize: 12,
+                  background: "rgba(34,197,94,0.08)", border: "1px solid rgba(34,197,94,0.2)",
+                  color: "#22c55e",
+                }}>
+                  <Check size={12} style={{ display: "inline", marginRight: 6 }} />
+                  {restoreMsg}
+                </div>
+              )}
+              {restoreStatus === "fail" && restoreMsg && (
+                <div style={{
+                  marginTop: 8, padding: "8px 12px", borderRadius: 8, fontSize: 12,
+                  background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)",
+                  color: "#ef4444",
+                }}>
+                  {restoreMsg}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </SectionCard>
 
       {/* ── Danger zone ── */}
       <div className="glass-card" style={{
