@@ -66,6 +66,9 @@ if [[ -f "$APP_DIR/prisma/pil.db" ]]; then
 fi
 
 # ── 4. Pull latest code from GitHub ──────────────────────────────────────────
+# Allow git to operate on this directory regardless of which user runs the script
+git config --global --add safe.directory "$REPO_DIR" 2>/dev/null || true
+
 if [[ -d "$REPO_DIR/.git" ]]; then
   info "Pulling latest code from GitHub..."
   sudo git -C "$REPO_DIR" fetch origin main
