@@ -53,6 +53,16 @@ export async function PUT(req: NextRequest, ctx: RouteContext<'/api/materials/[i
 export async function DELETE(_req: NextRequest, ctx: RouteContext<'/api/materials/[id]'>) {
   try {
     const { id } = await ctx.params
+
+    // Check if used in any formula before deleting
+    const usageCount = await prisma.formulaIngredient.count({ where: { rawMaterialId: id } })
+    if (usageCount > 0) {
+      return NextResponse.json(
+        { error: `Cannot delete — this material is used in ${usageCount} formula ingredient${usageCount > 1 ? 's' : ''}. Remove it from all formulas first.` },
+        { status: 409 }
+      )
+    }
+
     await prisma.rawMaterial.delete({ where: { id } })
     return NextResponse.json({ ok: true })
   } catch (err) {

@@ -625,6 +625,9 @@ export function InventoryContent() {
   const [addOpen,         setAddOpen]         = useState(false);
   const [editTarget,      setEditTarget]      = useState<RawMaterial | null>(null);
   const [viewTarget,      setViewTarget]      = useState<RawMaterial | null>(null);
+  const [deleteTarget,    setDeleteTarget]    = useState<RawMaterial | null>(null);
+  const [deleteError,     setDeleteError]     = useState<string | null>(null);
+  const [deleteLoading,   setDeleteLoading]   = useState(false);
 
   // Fetch from DB on mount
   useEffect(() => {
@@ -693,13 +696,23 @@ export function InventoryContent() {
     }
   };
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleteLoading(true);
+    setDeleteError(null);
     try {
-      const res = await fetch(`/api/materials/${id}`, { method: "DELETE" });
-      if (!res.ok) throw new Error(await res.text());
-      setMaterials(ms => ms.filter(m => m.id !== id));
-    } catch (err) {
-      console.error("Failed to delete material:", err);
+      const res = await fetch(`/api/materials/${deleteTarget.id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({ error: "Failed to delete material" }));
+        setDeleteError(body.error ?? "Failed to delete material");
+        return;
+      }
+      setMaterials(ms => ms.filter(m => m.id !== deleteTarget.id));
+      setDeleteTarget(null);
+    } catch {
+      setDeleteError("Failed to delete material. Please try again.");
+    } finally {
+      setDeleteLoading(false);
     }
   };
 
@@ -894,7 +907,7 @@ export function InventoryContent() {
                       <button className="btn-ghost" style={{ padding:"4px 8px" }} title="Edit"
                         onClick={() => setEditTarget(m)}><Edit2 size={13} /></button>
                       <button className="btn-ghost" style={{ padding:"4px 8px",color:"rgba(239,68,68,0.5)" }} title="Delete"
-                        onClick={() => handleDelete(m.id)}><Trash2 size={13} /></button>
+                        onClick={() => { setDeleteTarget(m); setDeleteError(null); }}><Trash2 size={13} /></button>
                     </div>
                   </td>
                 </tr>
@@ -932,6 +945,81 @@ export function InventoryContent() {
           onEdit={() => { setEditTarget(viewTarget); setViewTarget(null); }}
           onClose={() => setViewTarget(null)}
         />
+      )}
+
+      {/* Delete confirmation dialog */}
+      {deleteTarget && (
+        <div style={{
+          position: "fixed", inset: 0, zIndex: 1100,
+          background: "rgba(0,0,0,0.75)", backdropFilter: "blur(6px)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          padding: 24,
+        }}>
+          <div className="glass-elevated" style={{ width: "100%", maxWidth: 440 }}>
+            {/* Header */}
+            <div style={{
+              padding: "20px 24px 16px",
+              borderBottom: "1px solid rgba(255,255,255,0.07)",
+              display: "flex", alignItems: "center", gap: 12,
+            }}>
+              <div style={{
+                width: 36, height: 36, borderRadius: 8, flexShrink: 0,
+                background: "rgba(239,68,68,0.12)", border: "1px solid rgba(239,68,68,0.3)",
+                display: "flex", alignItems: "center", justifyContent: "center",
+              }}>
+                <Trash2 size={16} color="#ef4444" />
+              </div>
+              <div>
+                <div style={{ fontSize: 15, fontWeight: 700, color: "#fff" }}>Delete Material</div>
+                <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)" }}>This action cannot be undone</div>
+              </div>
+            </div>
+
+            {/* Body */}
+            <div style={{ padding: "18px 24px" }}>
+              <p style={{ fontSize: 13, color: "rgba(255,255,255,0.65)", lineHeight: 1.6, margin: 0 }}>
+                Are you sure you want to delete{" "}
+                <span style={{ color: "#fff", fontWeight: 600 }}>{deleteTarget.name}</span>?
+                {" "}This will permanently remove the material from your inventory.
+              </p>
+
+              {deleteError && (
+                <div style={{
+                  marginTop: 14, padding: "10px 14px", borderRadius: 8,
+                  background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.3)",
+                  display: "flex", alignItems: "flex-start", gap: 8,
+                }}>
+                  <AlertTriangle size={14} color="#ef4444" style={{ marginTop: 1, flexShrink: 0 }} />
+                  <span style={{ fontSize: 12, color: "#fca5a5", lineHeight: 1.5 }}>{deleteError}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div style={{ padding: "0 24px 20px", display: "flex", gap: 10, justifyContent: "flex-end" }}>
+              <button
+                className="btn-secondary"
+                onClick={() => { setDeleteTarget(null); setDeleteError(null); }}
+                disabled={deleteLoading}
+              >
+                Cancel
+              </button>
+              <button
+                className="btn-primary"
+                style={{
+                  background: "rgba(239,68,68,0.15)",
+                  border: "1px solid rgba(239,68,68,0.4)",
+                  color: "#ef4444",
+                }}
+                onClick={handleDelete}
+                disabled={deleteLoading}
+              >
+                <Trash2 size={13} />
+                {deleteLoading ? "Deleting…" : "Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
