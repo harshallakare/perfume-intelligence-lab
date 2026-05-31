@@ -288,13 +288,69 @@ function OrganizationSection() {
 function ProfileSection() {
   const [profile, setProfile] = useState({
     firstName: "Admin", lastName: "User",
-    email: "admin@pilhouse.com", phone: "+91 98765 43210",
+    email: "admin@pil.com", phone: "+91 98765 43210",
     title: "Head Perfumer", department: "Formulation",
     bio: "Leading product development and fragrance innovation at PIL House.",
   });
-  const [pwForm, setPwForm] = useState({ current: "", next: "", confirm: "" });
-  const [showPw, setShowPw] = useState(false);
-  const [saved, setSaved] = useState(false);
+
+  // ── Change password ──────────────────────────────────────────────────
+  const [pwForm,   setPwForm]   = useState({ current: "", next: "", confirm: "" });
+  const [showPw,   setShowPw]   = useState(false);
+  const [pwSaving, setPwSaving] = useState(false);
+  const [pwMsg,    setPwMsg]    = useState<{ type: "ok" | "err"; text: string } | null>(null);
+
+  // ── Recovery code ────────────────────────────────────────────────────
+  const [rcLoading, setRcLoading] = useState(false);
+  const [rcCode,    setRcCode]    = useState<string | null>(null);
+  const [rcExpiry,  setRcExpiry]  = useState<string | null>(null);
+  const [rcCopied,  setRcCopied]  = useState(false);
+
+  const changePassword = async () => {
+    if (!pwForm.current || !pwForm.next || !pwForm.confirm) {
+      setPwMsg({ type: "err", text: "All fields are required." }); return;
+    }
+    if (pwForm.next !== pwForm.confirm) {
+      setPwMsg({ type: "err", text: "New passwords do not match." }); return;
+    }
+    if (pwForm.next.length < 8) {
+      setPwMsg({ type: "err", text: "New password must be at least 8 characters." }); return;
+    }
+    setPwSaving(true); setPwMsg(null);
+    try {
+      const res  = await fetch("/api/auth/change-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ currentPassword: pwForm.current, newPassword: pwForm.next }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed");
+      setPwMsg({ type: "ok", text: "Password updated successfully!" });
+      setPwForm({ current: "", next: "", confirm: "" });
+    } catch (e: any) {
+      setPwMsg({ type: "err", text: e.message });
+    } finally {
+      setPwSaving(false);
+    }
+  };
+
+  const generateRecoveryCode = async () => {
+    setRcLoading(true); setRcCode(null);
+    try {
+      const res  = await fetch("/api/auth/reset-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "generate", email: profile.email }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed");
+      setRcCode(data.code);
+      setRcExpiry(new Date(data.expiresAt).toLocaleString());
+    } catch (e: any) {
+      setPwMsg({ type: "err", text: e.message });
+    } finally {
+      setRcLoading(false);
+    }
+  };
 
   return (
     <>
@@ -307,9 +363,9 @@ function ProfileSection() {
               onChange={e => setProfile(p => ({ ...p, lastName: e.target.value }))} />
           </div>
         </SettingRow>
-        <SettingRow label="Email" hint="Used for login and notifications">
-          <input className="input-base" type="email" value={profile.email}
-            onChange={e => setProfile(p => ({ ...p, email: e.target.value }))} />
+        <SettingRow label="Email" hint="Used for login — cannot be changed here">
+          <input className="input-base" type="email" value={profile.email} disabled
+            style={{ opacity: 0.55, cursor: "not-allowed" }} />
         </SettingRow>
         <SettingRow label="Phone">
           <input className="input-base" type="tel" value={profile.phone}
@@ -334,7 +390,20 @@ function ProfileSection() {
         </SettingRow>
       </SectionCard>
 
+      {/* ── Change Password ──────────────────────────────────────────── */}
       <SectionCard title="Change Password">
+        {pwMsg && (
+          <div style={{
+            padding: "10px 14px", borderRadius: 8, marginBottom: 16,
+            background: pwMsg.type === "ok" ? "rgba(34,197,94,0.08)" : "rgba(239,68,68,0.08)",
+            border: `1px solid ${pwMsg.type === "ok" ? "rgba(34,197,94,0.25)" : "rgba(239,68,68,0.25)"}`,
+            display: "flex", alignItems: "center", gap: 8,
+            fontSize: 13, color: pwMsg.type === "ok" ? "#22c55e" : "#fca5a5",
+          }}>
+            {pwMsg.type === "ok" ? <Check size={14}/> : <AlertTriangle size={14}/>}
+            {pwMsg.text}
+          </div>
+        )}
         <SettingRow label="Current Password">
           <div style={{ position: "relative" }}>
             <input className="input-base" type={showPw ? "text" : "password"}
@@ -345,11 +414,11 @@ function ProfileSection() {
               position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)",
               background: "none", border: "none", cursor: "pointer", color: "rgba(255,255,255,0.4)",
             }}>
-              {showPw ? <EyeOff size={14} /> : <Eye size={14} />}
+              {showPw ? <EyeOff size={14}/> : <Eye size={14}/>}
             </button>
           </div>
         </SettingRow>
-        <SettingRow label="New Password" hint="Min 12 chars, uppercase, number, symbol">
+        <SettingRow label="New Password" hint="Minimum 8 characters">
           <input className="input-base" type="password" value={pwForm.next} placeholder="New password"
             onChange={e => setPwForm(p => ({ ...p, next: e.target.value }))} />
         </SettingRow>
@@ -362,13 +431,58 @@ function ProfileSection() {
             )}
           </div>
         </SettingRow>
+        <div style={{ display: "flex", justifyContent: "flex-end", paddingTop: 8 }}>
+          <button className="btn-primary" onClick={changePassword} disabled={pwSaving}>
+            {pwSaving
+              ? <><Loader2 size={13} style={{ animation: "spin 1s linear infinite" }}/> Updating…</>
+              : <><Lock size={13}/> Update Password</>}
+          </button>
+        </div>
       </SectionCard>
 
-      <div style={{ display: "flex", justifyContent: "flex-end" }}>
-        <button className="btn-primary" onClick={() => { setSaved(true); setTimeout(() => setSaved(false), 2000); }}>
-          {saved ? <><Check size={14} /> Saved</> : <><Save size={14} /> Save Changes</>}
-        </button>
-      </div>
+      {/* ── Account Recovery ─────────────────────────────────────────── */}
+      <SectionCard title="Account Recovery">
+        <div style={{ fontSize: 13, color: "rgba(255,255,255,0.45)", marginBottom: 16, lineHeight: 1.6 }}>
+          Generate a one-time recovery code if you get locked out.
+          Valid for <strong style={{ color: "#c9a84c" }}>24 hours</strong> — use it on the login page to set a new password.
+        </div>
+
+        {rcCode ? (
+          <div style={{
+            padding: "14px 16px", borderRadius: 10,
+            background: "rgba(201,168,76,0.08)", border: "1px solid rgba(201,168,76,0.3)",
+          }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "#c9a84c", marginBottom: 8, letterSpacing: 1 }}>
+              ⚠ COPY THIS CODE — IT WON'T BE SHOWN AGAIN
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <div style={{
+                flex: 1, padding: "10px 14px", background: "rgba(0,0,0,0.4)",
+                border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8,
+                fontFamily: "monospace", fontSize: 18, fontWeight: 700, letterSpacing: 4, color: "#fff",
+              }}>
+                {rcCode}
+              </div>
+              <button className="btn-ghost" style={{ padding: "10px 12px", color: rcCopied ? "#22c55e" : undefined }}
+                onClick={() => { navigator.clipboard.writeText(rcCode).catch(()=>{}); setRcCopied(true); setTimeout(()=>setRcCopied(false),1500); }}>
+                {rcCopied ? <Check size={15}/> : <Copy size={15}/>}
+              </button>
+            </div>
+            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", marginTop: 8 }}>
+              Expires: {rcExpiry}
+            </div>
+          </div>
+        ) : (
+          <button className="btn-secondary" onClick={generateRecoveryCode} disabled={rcLoading}
+            style={{ fontSize: 13 }}>
+            {rcLoading
+              ? <><Loader2 size={13} style={{ animation: "spin 1s linear infinite" }}/> Generating…</>
+              : <><Key size={13}/> Generate Recovery Code</>}
+          </button>
+        )}
+      </SectionCard>
+
+      <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
     </>
   );
 }

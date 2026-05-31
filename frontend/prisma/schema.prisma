@@ -276,3 +276,17 @@ model PerfumeReference {
 
   @@map("perfume_references")
 }
+
+model UserCredential {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  name         String
+  role         String    @default("admin")
+  passwordHash String    @map("password_hash")
+  resetToken   String?   @map("reset_token")   // hashed reset token
+  resetExpiry  DateTime? @map("reset_expiry")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt      @map("updated_at")
+
+  @@map("user_credentials")
+}

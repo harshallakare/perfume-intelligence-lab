@@ -1,10 +1,17 @@
 import path from 'node:path'
+import { scryptSync, randomBytes } from 'node:crypto'
 import { PrismaClient } from '@prisma/client'
 import { PrismaBetterSqlite3 } from '@prisma/adapter-better-sqlite3'
 
 const dbUrl = `file:${path.join(process.cwd(), 'prisma', 'pil.db')}`
 const adapter = new PrismaBetterSqlite3({ url: dbUrl })
 const prisma = new PrismaClient({ adapter })
+
+function hashPassword(plain: string): string {
+  const salt = randomBytes(16).toString('hex')
+  const hash = scryptSync(plain, salt, 64, { N: 16384, r: 8, p: 1 }).toString('hex')
+  return `${salt}:${hash}`
+}
 
 async function main() {
   // ── Organization ───────────────────────────────────────────────────────
@@ -228,6 +235,22 @@ async function main() {
       })
     }
     console.log(`Seeded ${notifDefs.length} notifications`)
+  }
+
+  // ── User Credentials ──────────────────────────────────────────────────
+  const defaultUsers = [
+    { email: 'admin@pil.com',    name: 'Admin User',      role: 'admin',    password: 'admin123'    },
+    { email: 'perfumer@pil.com', name: 'Master Perfumer', role: 'perfumer', password: 'perfumer123' },
+    { email: 'viewer@pil.com',   name: 'Viewer',          role: 'viewer',   password: 'viewer123'   },
+  ]
+  for (const u of defaultUsers) {
+    const existing = await prisma.userCredential.findUnique({ where: { email: u.email } })
+    if (!existing) {
+      await prisma.userCredential.create({
+        data: { email: u.email, name: u.name, role: u.role, passwordHash: hashPassword(u.password) },
+      })
+      console.log(`Created credential: ${u.email}`)
+    }
   }
 
   // ── Perfume Reference Library ──────────────────────────────────────────
