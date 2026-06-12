@@ -33,6 +33,7 @@ export interface RawMaterial {
   current_stock: number;
   minimum_stock: number;
   unit_of_measure: string;
+  density?: number;
   cost_per_unit: number;
   currency: string;
   is_natural: boolean;
@@ -46,6 +47,45 @@ export interface RawMaterial {
   tags?: string[];
   created_at: string;
   updated_at: string;
+}
+
+export type PackagingType =
+  | "bottle" | "cap" | "sprayer" | "pump" | "box" | "label" | "vial" | "roller" | "other";
+
+export interface PackagingItem {
+  id: string;
+  organization_id: string;
+  name: string;
+  item_type: PackagingType;
+  capacity_ml?: number | null;
+  unit_price: number;
+  currency: string;
+  current_stock: number;
+  minimum_stock: number;
+  supplier_name?: string | null;
+  notes?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface FinishedGood {
+  id: string;
+  organization_id: string;
+  name: string;
+  perfume_type: string;
+  batch_volume_ml: number;
+  bottle_size_ml: number;
+  bottles_filled: number;
+  bottles_used: number;
+  leftover_ml: number;
+  oil_ml: number;
+  alcohol_ml: number;
+  fixative_ml: number;
+  unit_cost?: number | null;
+  batch_cost?: number | null;
+  packaging_id?: string | null;
+  notes?: string | null;
+  created_at: string;
 }
 
 export interface FormulaIngredient {

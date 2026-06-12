@@ -1,12 +1,126 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { FlaskConical, Clock, Star, CheckCircle2, Droplets, Wind, Sparkles } from "lucide-react";
+import { useState, useMemo, useEffect } from "react";
+import {
+  FlaskConical, Clock, Star, CheckCircle2, Sparkles,
+  Layers, Package, Boxes, Check, Square, CheckSquare, Loader2, AlertTriangle,
+} from "lucide-react";
+import { useSettings } from "@/context/settings-context";
+import type { PackagingItem } from "@/types";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type PerfumeType = "edt" | "edp" | "parfum" | "elixir" | "attar";
 type Goal = "projection" | "longevity" | "smooth_drydown" | "skin_friendly" | "rich_character" | "freshness";
+
+type AccordNote = "top" | "heart" | "base";
+interface AccordIngredient { name: string; pct: number; note: AccordNote }
+interface MasterAccord {
+  id: string;
+  name: string;
+  origin: string;       // attribution / family
+  description: string;
+  density: number;      // g/mL for weighing
+  ingredients: AccordIngredient[];
+}
+
+// ─── Master accords (classic perfumer building blocks) ─────────────────────────
+// Percentages are of the fragrance-oil concentrate. Interpretations for studio use.
+const MASTER_ACCORDS: MasterAccord[] = [
+  {
+    id: "grojsman",
+    name: "Grojsman Accord",
+    origin: "Sophia Grojsman · rosy-ionone signature (Trésor / Paris school)",
+    description: "The lush, velvety rose-violet over a radiant musky amber that defines Grojsman's masterpieces. Heavy on ionones, Hedione and damascones.",
+    density: 0.96,
+    ingredients: [
+      { name: "Hedione (Methyl Dihydrojasmonate)", pct: 25, note: "heart" },
+      { name: "Methyl Ionone Gamma",               pct: 18, note: "heart" },
+      { name: "Iso E Super",                        pct: 14, note: "base"  },
+      { name: "Galaxolide (50% IPM)",               pct: 12, note: "base"  },
+      { name: "Phenyl Ethyl Alcohol",              pct: 10, note: "heart" },
+      { name: "Bergamot EO",                        pct:  7, note: "top"   },
+      { name: "Vanillin",                           pct:  5, note: "base"  },
+      { name: "Damascone Beta",                     pct:  3, note: "heart" },
+      { name: "Linalool",                           pct:  4, note: "top"   },
+      { name: "Rose Oxide",                         pct:  2, note: "top"   },
+    ],
+  },
+  {
+    id: "chypre",
+    name: "Classic Chypre Base",
+    origin: "Coty Chypre lineage · bergamot–oakmoss–labdanum",
+    description: "The timeless mossy-woody chord — sparkling bergamot over an earthy oakmoss, labdanum and patchouli foundation.",
+    density: 0.97,
+    ingredients: [
+      { name: "Bergamot EO",        pct: 28, note: "top"   },
+      { name: "Patchouli EO",       pct: 18, note: "base"  },
+      { name: "Labdanum Absolute",  pct: 16, note: "base"  },
+      { name: "Oakmoss Absolute",   pct: 12, note: "base"  },
+      { name: "Iso E Super",        pct: 10, note: "base"  },
+      { name: "Geranium EO",        pct:  8, note: "heart" },
+      { name: "Coumarin",           pct:  5, note: "base"  },
+      { name: "Vetiver EO",         pct:  3, note: "base"  },
+    ],
+  },
+  {
+    id: "aldehyde-floral",
+    name: "Aldehydic Floral",
+    origin: "No.5 school · sparkling aldehyde–rose–jasmine",
+    description: "The soapy, effervescent aldehyde lift over an abstract rose-jasmine bouquet and powdery musk — couture femininity.",
+    density: 0.95,
+    ingredients: [
+      { name: "Aldehyde C-11 Undecylenic", pct:  6, note: "top"   },
+      { name: "Aldehyde C-12 MNA",         pct:  4, note: "top"   },
+      { name: "Hedione",                   pct: 22, note: "heart" },
+      { name: "Phenyl Ethyl Alcohol",      pct: 20, note: "heart" },
+      { name: "Methyl Ionone Gamma",       pct: 14, note: "heart" },
+      { name: "Galaxolide (50% IPM)",      pct: 14, note: "base"  },
+      { name: "Ylang Ylang EO",            pct:  8, note: "heart" },
+      { name: "Sandalwood (Mysore)",       pct:  7, note: "base"  },
+      { name: "Vanillin",                  pct:  5, note: "base"  },
+    ],
+  },
+  {
+    id: "ambrox-wood",
+    name: "Modern Ambrox Wood",
+    origin: "Contemporary niche · Ambroxan–ISO E radiant woods",
+    description: "The clean, skin-amplifying ambergris-cedar chord behind modern fresh-woody blockbusters. Huge projection, transparent.",
+    density: 0.94,
+    ingredients: [
+      { name: "Iso E Super",        pct: 35, note: "base"  },
+      { name: "Ambroxan",           pct: 22, note: "base"  },
+      { name: "Hedione",            pct: 14, note: "heart" },
+      { name: "Cedarwood (Virginia)", pct: 10, note: "base" },
+      { name: "Norlimbanol",        pct:  6, note: "base"  },
+      { name: "Grapefruit EO",      pct:  7, note: "top"   },
+      { name: "Pink Pepper EO",     pct:  6, note: "top"   },
+    ],
+  },
+  {
+    id: "oriental-amber",
+    name: "Oriental Amber Base",
+    origin: "Shalimar lineage · vanilla–benzoin–labdanum",
+    description: "Warm, balsamic and resinous — a sweet amber of vanilla, benzoin and labdanum with a powdery tonka glow.",
+    density: 0.98,
+    ingredients: [
+      { name: "Vanillin",            pct: 22, note: "base"  },
+      { name: "Labdanum Absolute",   pct: 18, note: "base"  },
+      { name: "Benzoin Resinoid",    pct: 16, note: "base"  },
+      { name: "Coumarin",            pct: 12, note: "base"  },
+      { name: "Ethylene Brassylate", pct: 12, note: "base"  },
+      { name: "Bergamot EO",         pct:  8, note: "top"   },
+      { name: "Tonka Bean Absolute", pct:  7, note: "base"  },
+      { name: "Benzyl Benzoate",     pct:  5, note: "base"  },
+    ],
+  },
+];
+
+const NOTE_META: Record<AccordNote, { color: string; label: string }> = {
+  top:   { color: "#60a5fa", label: "Top"   },
+  heart: { color: "#f472b6", label: "Heart" },
+  base:  { color: "#c9a84c", label: "Base"  },
+};
 
 interface TypeConfig {
   label: string;
@@ -203,11 +317,35 @@ function StatTile({ emoji, value, label, color }: { emoji: string; value: string
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export function CloneContent() {
+  const { sym } = useSettings();
   const [quantity, setQuantity] = useState<number>(100);
   const [customQty, setCustomQty] = useState("");
   const [isCustom, setIsCustom] = useState(false);
   const [perfumeType, setPerfumeType] = useState<PerfumeType>("edp");
   const [goals, setGoals] = useState<Goal[]>([]);
+
+  // Accord (oil base) selection
+  const [accordId, setAccordId] = useState<string | null>(null);
+  const accord = MASTER_ACCORDS.find((a) => a.id === accordId) ?? null;
+
+  // Production checklist
+  const [checked, setChecked] = useState<Record<string, boolean>>({});
+  const toggleCheck = (key: string) => setChecked((p) => ({ ...p, [key]: !p[key] }));
+
+  // Export to stock
+  const [packaging, setPackaging] = useState<PackagingItem[]>([]);
+  const [bottleSku, setBottleSku] = useState<string>("");      // packaging id, or "" for manual
+  const [manualBottle, setManualBottle] = useState<number>(10);
+  const [batchName, setBatchName] = useState("");
+  const [committing, setCommitting] = useState(false);
+  const [commitMsg, setCommitMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
+
+  useEffect(() => {
+    fetch("/api/packaging")
+      .then((r) => r.json())
+      .then((d) => setPackaging(Array.isArray(d) ? d : []))
+      .catch(() => {});
+  }, []);
 
   const effectiveQty = isCustom ? parseFloat(customQty) || 0 : quantity;
   const cfg = TYPE_CONFIGS[perfumeType];
@@ -224,6 +362,70 @@ export function CloneContent() {
     setGoals((prev) => (prev.includes(g) ? prev.filter((x) => x !== g) : [...prev, g]));
 
   const tips = BLENDING_TIPS[perfumeType];
+
+  // ── Accord scaled to oil volume ──
+  const oilGrams = blend.oil * (accord?.density ?? 0.96);
+  const accordRows = accord
+    ? accord.ingredients.map((ing) => ({
+        ...ing,
+        ml: parseFloat(((ing.pct / 100) * blend.oil).toFixed(2)),
+        g:  parseFloat(((ing.pct / 100) * oilGrams).toFixed(2)),
+      }))
+    : [];
+
+  // ── Bottle fill / export-to-stock maths ──
+  const bottleItems = packaging.filter(
+    (p) => ["bottle", "vial", "roller"].includes(p.item_type) && (p.capacity_ml ?? 0) > 0
+  );
+  const selectedPkg = bottleItems.find((p) => p.id === bottleSku) ?? null;
+  const bottleSize  = selectedPkg ? (selectedPkg.capacity_ml ?? 0) : manualBottle;
+  const bottlesFilled = bottleSize > 0 ? Math.floor(effectiveQty / bottleSize) : 0;
+  const leftoverMl  = bottleSize > 0 ? parseFloat((effectiveQty - bottlesFilled * bottleSize).toFixed(2)) : effectiveQty;
+  const stockShort  = selectedPkg ? Math.max(0, bottlesFilled - selectedPkg.current_stock) : 0;
+  const bottlesUsable = selectedPkg ? Math.min(bottlesFilled, selectedPkg.current_stock) : bottlesFilled;
+
+  // Checklist rows (alcohol, oil/accord, fixatives)
+  const checklistRows: { key: string; label: string; amount: string; color: string }[] = [
+    ...(blend.alcohol > 0 ? [{ key: "alcohol", label: "Perfumer's Alcohol", amount: `${blend.alcohol} ml`, color: "#60a5fa" }] : []),
+    ...(accord
+      ? accordRows.map((r) => ({ key: `acc-${r.name}`, label: r.name, amount: `${r.g} g`, color: NOTE_META[r.note].color }))
+      : [{ key: "oil", label: "Fragrance Oil", amount: `${blend.oil} ml`, color: "#c9a84c" }]),
+    ...blend.fixatives.map((f) => ({ key: `fix-${f.name}`, label: f.name, amount: `${f.ml} ml`, color: "#a78bfa" })),
+  ];
+  const doneCount = checklistRows.filter((r) => checked[r.key]).length;
+
+  const handleCommit = async () => {
+    setCommitting(true); setCommitMsg(null);
+    try {
+      const res = await fetch("/api/finished-goods", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: batchName.trim() || `${cfg.shortLabel} clone · ${effectiveQty}ml · ${new Date().toLocaleDateString()}`,
+          perfume_type: perfumeType,
+          batch_volume_ml: effectiveQty,
+          bottle_size_ml: bottleSize,
+          bottles_filled: bottlesUsable,
+          leftover_ml: leftoverMl,
+          oil_ml: blend.oil,
+          alcohol_ml: blend.alcohol,
+          fixative_ml: blend.fixativeTotal,
+          packaging_id: selectedPkg?.id ?? null,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed to commit");
+      // Reflect packaging decrement locally
+      if (selectedPkg && data.bottles_used) {
+        setPackaging((ps) => ps.map((p) => p.id === selectedPkg.id ? { ...p, current_stock: p.current_stock - data.bottles_used } : p));
+      }
+      setCommitMsg({ type: "ok", text: `Committed ${bottlesUsable} × ${bottleSize}ml bottle${bottlesUsable !== 1 ? "s" : ""} to stock${data.bottles_used ? ` · ${data.bottles_used} bottles deducted from supplies` : ""}.` });
+    } catch (e: any) {
+      setCommitMsg({ type: "err", text: e.message });
+    } finally {
+      setCommitting(false);
+    }
+  };
 
   return (
     <div style={{ display: "flex", height: "calc(100vh - 60px)", overflow: "hidden" }}>
@@ -422,6 +624,55 @@ export function CloneContent() {
             </div>
           </div>
         )}
+
+        {/* ── Step 4: Oil Base / Accord ── */}
+        <div style={{ marginTop: 8 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.38)", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 4 }}>
+            {perfumeType === "attar" ? "3" : "4"} · Oil Base <span style={{ color: "#c9a84c" }}>(Accord)</span>
+          </div>
+          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.28)", marginBottom: 11 }}>
+            Build the fragrance oil on a classic perfumer accord — scaled to your oil volume
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+            <button
+              onClick={() => setAccordId(null)}
+              style={{
+                padding: "9px 13px", borderRadius: 9, textAlign: "left", cursor: "pointer",
+                border: `1px solid ${accordId === null ? "rgba(201,168,76,0.4)" : "rgba(255,255,255,0.07)"}`,
+                background: accordId === null ? "rgba(201,168,76,0.07)" : "rgba(255,255,255,0.015)",
+                display: "flex", alignItems: "center", gap: 10, transition: "all 0.15s",
+              }}
+            >
+              <FlaskConical size={15} style={{ color: accordId === null ? "#c9a84c" : "rgba(255,255,255,0.4)", flexShrink: 0 }} />
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: accordId === null ? "#c9a84c" : "#fff" }}>My Own Oil</div>
+                <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)" }}>Use a ready fragrance oil — no accord breakdown</div>
+              </div>
+            </button>
+            {MASTER_ACCORDS.map((a) => {
+              const active = accordId === a.id;
+              return (
+                <button
+                  key={a.id}
+                  onClick={() => setAccordId(a.id)}
+                  style={{
+                    padding: "9px 13px", borderRadius: 9, textAlign: "left", cursor: "pointer",
+                    border: `1px solid ${active ? "rgba(201,168,76,0.4)" : "rgba(255,255,255,0.07)"}`,
+                    background: active ? "rgba(201,168,76,0.07)" : "rgba(255,255,255,0.015)",
+                    display: "flex", alignItems: "center", gap: 10, transition: "all 0.15s",
+                  }}
+                >
+                  <Layers size={15} style={{ color: active ? "#c9a84c" : "rgba(255,255,255,0.4)", flexShrink: 0 }} />
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: active ? "#c9a84c" : "#fff" }}>{a.name}</div>
+                    <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)" }}>{a.origin}</div>
+                  </div>
+                  {active && <CheckCircle2 size={13} style={{ color: "#c9a84c", flexShrink: 0 }} />}
+                </button>
+              );
+            })}
+          </div>
+        </div>
       </div>
 
       {/* ══════════════════════════════════════════
@@ -704,6 +955,182 @@ export function CloneContent() {
                     <span style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", lineHeight: 1.65 }}>{tip}</span>
                   </div>
                 ))}
+              </div>
+            </div>
+
+            {/* ── Accord breakdown (oil base) ── */}
+            {accord && blend.oil > 0 && (
+              <div className="glass-card" style={{ overflow: "hidden", marginTop: 18 }}>
+                <div style={{ padding: "13px 20px", borderBottom: "1px solid rgba(255,255,255,0.07)", display: "flex", alignItems: "center", gap: 10 }}>
+                  <Layers size={14} style={{ color: "#c9a84c" }} />
+                  <span style={{ fontSize: 13, fontWeight: 700, color: "#fff" }}>{accord.name} — Oil Build</span>
+                  <span className="badge badge-muted" style={{ marginLeft: "auto" }}>{blend.oil} ml oil ≈ {oilGrams.toFixed(1)} g</span>
+                </div>
+                <div style={{ padding: "12px 20px", fontSize: 12, color: "rgba(255,255,255,0.45)", lineHeight: 1.55, fontStyle: "italic", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+                  {accord.description}
+                </div>
+                <table className="table-base">
+                  <thead>
+                    <tr><th>Note</th><th>Material</th><th>%</th><th>Weigh (g)</th><th>Volume (ml)</th></tr>
+                  </thead>
+                  <tbody>
+                    {accordRows.map((r) => (
+                      <tr key={r.name}>
+                        <td>
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                            <span style={{ width: 8, height: 8, borderRadius: "50%", background: NOTE_META[r.note].color }} />
+                            <span style={{ fontSize: 11, color: "rgba(255,255,255,0.5)" }}>{NOTE_META[r.note].label}</span>
+                          </span>
+                        </td>
+                        <td style={{ color: "#fff", fontWeight: 500 }}>{r.name}</td>
+                        <td style={{ color: "rgba(255,255,255,0.5)" }}>{r.pct}%</td>
+                        <td style={{ color: "#c9a84c", fontWeight: 800 }}>{r.g} g</td>
+                        <td style={{ color: "rgba(255,255,255,0.6)" }}>{r.ml} ml</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {/* ── Production checklist ── */}
+            <div className="glass-card" style={{ overflow: "hidden", marginTop: 18 }}>
+              <div style={{ padding: "13px 20px", borderBottom: "1px solid rgba(255,255,255,0.07)", display: "flex", alignItems: "center", gap: 10 }}>
+                <CheckSquare size={14} style={{ color: "#34d399" }} />
+                <span style={{ fontSize: 13, fontWeight: 700, color: "#fff" }}>Production Checklist</span>
+                <span className="badge badge-muted" style={{ marginLeft: "auto" }}>{doneCount} / {checklistRows.length} added</span>
+              </div>
+              {/* progress */}
+              <div style={{ height: 4, background: "rgba(255,255,255,0.06)" }}>
+                <div style={{ height: "100%", width: `${checklistRows.length ? (doneCount / checklistRows.length) * 100 : 0}%`, background: doneCount === checklistRows.length ? "#34d399" : "#c9a84c", transition: "width 0.3s" }} />
+              </div>
+              <div style={{ padding: "8px 12px" }}>
+                {checklistRows.map((r) => {
+                  const on = !!checked[r.key];
+                  return (
+                    <button
+                      key={r.key}
+                      onClick={() => toggleCheck(r.key)}
+                      style={{
+                        width: "100%", display: "flex", alignItems: "center", gap: 11,
+                        padding: "9px 10px", borderRadius: 8, cursor: "pointer", textAlign: "left",
+                        background: on ? "rgba(52,211,153,0.06)" : "transparent",
+                        border: "1px solid " + (on ? "rgba(52,211,153,0.18)" : "transparent"),
+                        marginBottom: 2, transition: "all 0.12s",
+                      }}
+                    >
+                      {on
+                        ? <CheckSquare size={16} style={{ color: "#34d399", flexShrink: 0 }} />
+                        : <Square size={16} style={{ color: "rgba(255,255,255,0.25)", flexShrink: 0 }} />}
+                      <span style={{ width: 8, height: 8, borderRadius: "50%", background: r.color, flexShrink: 0 }} />
+                      <span style={{ flex: 1, fontSize: 13, color: on ? "rgba(255,255,255,0.5)" : "#fff", textDecoration: on ? "line-through" : "none" }}>{r.label}</span>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: on ? "rgba(255,255,255,0.4)" : r.color }}>{r.amount}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* ── Export to stock ── */}
+            <div className="glass-card" style={{ overflow: "hidden", marginTop: 18, marginBottom: 8 }}>
+              <div style={{ padding: "13px 20px", borderBottom: "1px solid rgba(255,255,255,0.07)", display: "flex", alignItems: "center", gap: 10 }}>
+                <Boxes size={14} style={{ color: "#60a5fa" }} />
+                <span style={{ fontSize: 13, fontWeight: 700, color: "#fff" }}>Bottle &amp; Export to Stock</span>
+                <span className="badge badge-muted" style={{ marginLeft: "auto" }}>Batch {effectiveQty} ml</span>
+              </div>
+
+              <div style={{ padding: 20 }}>
+                {/* Bottle picker */}
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 160px", gap: 12, marginBottom: 16 }}>
+                  <div>
+                    <div style={{ fontSize: 11, color: "rgba(255,255,255,0.45)", marginBottom: 6 }}>Fill into bottle</div>
+                    <select className="select-base" value={bottleSku} onChange={(e) => setBottleSku(e.target.value)}>
+                      <option value="">Manual size…</option>
+                      {bottleItems.map((p) => (
+                        <option key={p.id} value={p.id}>{p.name} · {p.capacity_ml}ml ({p.current_stock} in stock)</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 11, color: "rgba(255,255,255,0.45)", marginBottom: 6 }}>Bottle size (ml)</div>
+                    <input
+                      className="input-base"
+                      type="number"
+                      min={1}
+                      value={bottleSize || ""}
+                      disabled={!!selectedPkg}
+                      onChange={(e) => setManualBottle(parseFloat(e.target.value) || 0)}
+                      style={selectedPkg ? { opacity: 0.5 } : {}}
+                    />
+                  </div>
+                </div>
+
+                {bottleItems.length === 0 && (
+                  <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", marginBottom: 14 }}>
+                    Tip: add bottles under <strong style={{ color: "#c9a84c" }}>Packaging &amp; Supplies</strong> to track stock consumption automatically.
+                  </div>
+                )}
+
+                {/* Yield tiles */}
+                {bottleSize > 0 && (
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12, marginBottom: 16 }}>
+                    {[
+                      { label: "Bottles filled", value: `${bottlesFilled}`, sub: `× ${bottleSize}ml`, color: "#34d399" },
+                      { label: "Leftover", value: `${leftoverMl}`, sub: "ml", color: "#eab308" },
+                      { label: selectedPkg ? "From stock" : "Bottles needed", value: `${bottlesUsable}`, sub: selectedPkg ? `of ${selectedPkg.current_stock}` : "bottles", color: "#60a5fa" },
+                    ].map((t) => (
+                      <div key={t.label} style={{ padding: "12px 14px", borderRadius: 10, background: `${t.color}10`, border: `1px solid ${t.color}28` }}>
+                        <div style={{ fontSize: 24, fontWeight: 800, color: t.color, fontFamily: "Georgia, serif", lineHeight: 1 }}>
+                          {t.value}<span style={{ fontSize: 12, fontWeight: 600, marginLeft: 4, opacity: 0.7 }}>{t.sub}</span>
+                        </div>
+                        <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", marginTop: 4 }}>{t.label}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {stockShort > 0 && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 13px", background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.25)", borderRadius: 8, marginBottom: 14, fontSize: 12, color: "#fca5a5" }}>
+                    <AlertTriangle size={13} />
+                    <span>Short by <strong>{stockShort}</strong> bottle{stockShort !== 1 ? "s" : ""} — only {selectedPkg!.current_stock} in stock. {bottlesUsable} will be committed.</span>
+                  </div>
+                )}
+
+                {/* Batch name + commit */}
+                <div style={{ display: "flex", gap: 10, alignItems: "flex-end" }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 11, color: "rgba(255,255,255,0.45)", marginBottom: 6 }}>Batch name</div>
+                    <input
+                      className="input-base"
+                      placeholder={`${cfg.shortLabel} clone · ${effectiveQty}ml`}
+                      value={batchName}
+                      onChange={(e) => setBatchName(e.target.value)}
+                    />
+                  </div>
+                  <button
+                    className="btn-primary"
+                    disabled={committing || bottleSize <= 0 || bottlesUsable <= 0}
+                    onClick={handleCommit}
+                    style={{ whiteSpace: "nowrap" }}
+                  >
+                    {committing
+                      ? <><Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} /> Committing…</>
+                      : <><Boxes size={14} /> Commit to Stock</>}
+                  </button>
+                </div>
+
+                {commitMsg && (
+                  <div style={{
+                    marginTop: 12, padding: "10px 14px", borderRadius: 8,
+                    background: commitMsg.type === "ok" ? "rgba(34,197,94,0.08)" : "rgba(239,68,68,0.08)",
+                    border: `1px solid ${commitMsg.type === "ok" ? "rgba(34,197,94,0.25)" : "rgba(239,68,68,0.25)"}`,
+                    display: "flex", alignItems: "center", gap: 8,
+                    fontSize: 12, color: commitMsg.type === "ok" ? "#22c55e" : "#fca5a5",
+                  }}>
+                    {commitMsg.type === "ok" ? <Check size={14} /> : <AlertTriangle size={14} />}
+                    {commitMsg.text}
+                  </div>
+                )}
               </div>
             </div>
           </>

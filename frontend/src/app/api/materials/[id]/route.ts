@@ -32,6 +32,7 @@ export async function PUT(req: NextRequest, ctx: RouteContext<'/api/materials/[i
         currentStock: body.current_stock ?? 0,
         minimumStock: body.minimum_stock ?? 0,
         unitOfMeasure: body.unit_of_measure ?? 'g',
+        density: body.density ?? null,
         costPerUnit: body.cost_per_unit ?? 0,
         currency: body.currency ?? 'USD',
         supplierName: body.supplier_name ?? null,

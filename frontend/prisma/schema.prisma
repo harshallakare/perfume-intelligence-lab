@@ -102,6 +102,8 @@ model Organization {
   formulas        Formula[]
   productions     ProductionOrder[]
   notifications   Notification[]
+  packagingItems  PackagingItem[]
+  finishedGoods   FinishedGood[]
 
   @@map("organizations")
 }
@@ -124,6 +126,7 @@ model RawMaterial {
   isRestricted      Boolean         @default(false) @map("is_restricted")
   ifraRestricted    Boolean         @default(false) @map("ifra_restricted")
   unitOfMeasure     String          @default("g")   @map("unit_of_measure")
+  density           Float?          // g per mL — bridges weight (g) and volume (mL) pricing
   currentStock      Float           @default(0)     @map("current_stock")
   minimumStock      Float           @default(0)     @map("minimum_stock")
   costPerUnit       Float           @default(0)     @map("cost_per_unit")
@@ -289,4 +292,51 @@ model UserCredential {
   updatedAt    DateTime  @updatedAt      @map("updated_at")
 
   @@map("user_credentials")
+}
+
+// Non-consumable supplies: bottles, caps, sprayers, boxes, labels, vials, pumps …
+model PackagingItem {
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  name           String
+  itemType       String   @map("item_type")    // bottle | cap | sprayer | pump | box | label | vial | roller | other
+  capacityMl     Float?   @map("capacity_ml")   // for bottles / vials — used to plan fills
+  unitPrice      Float    @default(0) @map("unit_price")
+  currency       String   @default("USD")
+  currentStock   Int      @default(0) @map("current_stock")
+  minimumStock   Int      @default(0) @map("minimum_stock")
+  supplierName   String?  @map("supplier_name")
+  notes          String?
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt      @map("updated_at")
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, name])
+  @@map("packaging_items")
+}
+
+// A produced batch committed to stock from the Clone Engine
+model FinishedGood {
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  name           String
+  perfumeType    String   @map("perfume_type")   // edt | edp | parfum | elixir | attar
+  batchVolumeMl  Float    @map("batch_volume_ml")
+  bottleSizeMl   Float    @map("bottle_size_ml")
+  bottlesFilled  Int      @map("bottles_filled")
+  bottlesUsed    Int      @default(0) @map("bottles_used")  // packaging stock consumed
+  leftoverMl     Float    @default(0) @map("leftover_ml")
+  oilMl          Float    @default(0) @map("oil_ml")
+  alcoholMl      Float    @default(0) @map("alcohol_ml")
+  fixativeMl     Float    @default(0) @map("fixative_ml")
+  unitCost       Float?   @map("unit_cost")        // cost per filled bottle
+  batchCost      Float?   @map("batch_cost")
+  packagingId    String?  @map("packaging_id")     // which bottle SKU was consumed
+  notes          String?
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("finished_goods")
 }

@@ -5,7 +5,7 @@ import {
   Search, Plus, Download, AlertTriangle, Package,
   ArrowUpDown, Eye, Edit2, Trash2, X, Check, FlaskConical,
 } from "lucide-react";
-import { stockStatus, stockBadgeClass, stockLabel, materialTypeLabel, formatNumber } from "@/lib/utils";
+import { stockStatus, stockBadgeClass, stockLabel, materialTypeLabel, formatNumber, normalizedCost } from "@/lib/utils";
 import { useSettings } from "@/context/settings-context";
 import type { RawMaterial, MaterialType, OdorFamily } from "@/types";
 import { exportCsv, printHtml, buildHtmlTable } from "@/lib/export";
@@ -51,7 +51,7 @@ function blankForm() {
     odor_family: "floral" as OdorFamily, odor_description: "",
     odor_intensity: 5, volatility_class: "M" as "T"|"M"|"B",
     purity_percentage: 100, current_stock: 0, minimum_stock: 0,
-    unit_of_measure: "g", cost_per_unit: 0, supplier_name: "",
+    unit_of_measure: "g", density: 0, cost_per_unit: 0, supplier_name: "",
     storage_conditions: "", is_natural: false, is_allergen: false,
     is_restricted: false, ifra_restricted: false,
   };
@@ -121,7 +121,7 @@ function MaterialModal({
           volatility_class: initial.volatility_class ?? "M",
           purity_percentage: initial.purity_percentage ?? 100,
           current_stock: initial.current_stock, minimum_stock: initial.minimum_stock,
-          unit_of_measure: initial.unit_of_measure, cost_per_unit: initial.cost_per_unit,
+          unit_of_measure: initial.unit_of_measure, density: initial.density ?? 0, cost_per_unit: initial.cost_per_unit,
           supplier_name: initial.supplier_name ?? "",
           storage_conditions: initial.storage_conditions ?? "",
           is_natural: initial.is_natural, is_allergen: initial.is_allergen,
@@ -342,6 +342,48 @@ function MaterialModal({
                 {errors.cost_per_unit && <div style={{ fontSize: 11, color: "#ef4444", marginTop: 3 }}>{errors.cost_per_unit}</div>}
               </Field>
 
+              <Field label="Density (g/mL)" hint="optional — bridges g ↔ mL pricing">
+                <input
+                  className="input-base"
+                  type="number"
+                  min={0}
+                  step={0.001}
+                  placeholder="e.g. 0.95 (defaults to 1.0)"
+                  value={form.density || ""}
+                  onChange={e => set("density", parseFloat(e.target.value) || 0)}
+                />
+              </Field>
+
+              {/* Per-gram / per-mL normalized pricing */}
+              {form.cost_per_unit > 0 && (() => {
+                const n = normalizedCost(form.cost_per_unit, form.unit_of_measure, form.density);
+                return (
+                  <div style={{
+                    padding: "12px 16px", borderRadius: 8,
+                    background: "rgba(96,165,250,0.06)", border: "1px solid rgba(96,165,250,0.2)",
+                    display: "flex", gap: 24,
+                  }}>
+                    <div>
+                      <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", marginBottom: 3 }}>Cost / gram</div>
+                      <div style={{ fontSize: 16, fontWeight: 800, color: "#60a5fa", fontFamily: "Georgia, serif" }}>
+                        {sym}{n.perGram != null ? n.perGram.toFixed(4) : "—"}
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", marginBottom: 3 }}>Cost / mL</div>
+                      <div style={{ fontSize: 16, fontWeight: 800, color: "#60a5fa", fontFamily: "Georgia, serif" }}>
+                        {sym}{n.perMl != null ? n.perMl.toFixed(4) : "—"}
+                      </div>
+                    </div>
+                    {n.assumedDensity && (
+                      <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", alignSelf: "center", lineHeight: 1.4 }}>
+                        density assumed<br/>1.0 g/mL
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
               {/* Live stock value preview */}
               {form.current_stock > 0 && form.cost_per_unit > 0 && (
                 <div style={{
@@ -531,7 +573,7 @@ function ViewDrawer({ m, onEdit, onClose }: {
         <div style={{ flex: 1, overflowY: "auto", padding: 24 }}>
           {/* Cost highlight */}
           <div style={{
-            padding: "14px 18px", borderRadius: 10, marginBottom: 20,
+            padding: "14px 18px", borderRadius: 10, marginBottom: 14,
             background: "rgba(201,168,76,0.06)", border: "1px solid rgba(201,168,76,0.2)",
             display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12,
           }}>
@@ -548,6 +590,33 @@ function ViewDrawer({ m, onEdit, onClose }: {
               </div>
             </div>
           </div>
+
+          {/* Normalized per-gram / per-mL pricing */}
+          {(() => {
+            const n = normalizedCost(m.cost_per_unit, m.unit_of_measure, m.density);
+            return (
+              <div style={{
+                padding: "12px 18px", borderRadius: 10, marginBottom: 20,
+                background: "rgba(96,165,250,0.06)", border: "1px solid rgba(96,165,250,0.2)",
+                display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12,
+              }}>
+                <div>
+                  <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", marginBottom: 3 }}>Cost / gram</div>
+                  <div style={{ fontSize: 16, fontWeight: 800, color: "#60a5fa", fontFamily: "Georgia, serif" }}>
+                    {sym}{n.perGram != null ? n.perGram.toFixed(4) : "—"}
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", marginBottom: 3 }}>
+                    Cost / mL {n.assumedDensity && <span style={{ fontSize: 9, color: "rgba(255,255,255,0.3)" }}>(ρ≈1.0)</span>}
+                  </div>
+                  <div style={{ fontSize: 16, fontWeight: 800, color: "#60a5fa", fontFamily: "Georgia, serif" }}>
+                    {sym}{n.perMl != null ? n.perMl.toFixed(4) : "—"}
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Stock gauge */}
           <div style={{ marginBottom: 20 }}>
@@ -574,6 +643,7 @@ function ViewDrawer({ m, onEdit, onClose }: {
             ["Odor Family",      m.odor_family ? m.odor_family.charAt(0).toUpperCase() + m.odor_family.slice(1) : "—"],
             ["Odor Intensity",   m.odor_intensity ? `${m.odor_intensity} / 10` : "—"],
             ["Purity",           m.purity_percentage != null ? `${m.purity_percentage}%` : "—"],
+            ["Density",          m.density ? `${m.density} g/mL` : "—"],
             ["Supplier",         m.supplier_name || "—"],
             ["Storage",          m.storage_conditions || "—"],
           ].map(([label, value]) => (

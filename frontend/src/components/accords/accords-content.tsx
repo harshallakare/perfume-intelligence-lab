@@ -43,6 +43,32 @@ interface Accord {
 
 const SYSTEM_ACCORDS: Accord[] = [
   {
+    id: "acc-grojsman",
+    name: "Grojsman Accord",
+    category: "rose",
+    description: "Sophia Grojsman's signature rosy-ionone chord — lush rose-violet over a radiant musky amber. The DNA of Trésor and Paris.",
+    isSystem: true,
+    projection: 8,
+    longevity: 9,
+    odorProfile: "Velvety rose, powdery violet, jammy damascone over warm musky amber",
+    recommendedUsagePctMin: 15,
+    recommendedUsagePctMax: 40,
+    costPerGram: 0.24,
+    usedInFormulas: 0,
+    ingredients: [
+      { name: "Hedione (Methyl Dihydrojasmonate)", percentage: 25, section: "heart", casNumber: "24851-98-7" },
+      { name: "Methyl Ionone Gamma", percentage: 18, section: "heart", casNumber: "127-51-5" },
+      { name: "Iso E Super", percentage: 14, section: "base", casNumber: "54464-57-2" },
+      { name: "Galaxolide (50% IPM)", percentage: 12, section: "base", casNumber: "1222-05-5" },
+      { name: "Phenyl Ethyl Alcohol", percentage: 10, section: "heart", casNumber: "60-12-8" },
+      { name: "Bergamot EO", percentage: 7, section: "top" },
+      { name: "Vanillin", percentage: 5, section: "base", casNumber: "121-33-5" },
+      { name: "Linalool", percentage: 4, section: "top", casNumber: "78-70-6" },
+      { name: "Damascone Beta", percentage: 3, section: "heart", casNumber: "23726-92-3" },
+      { name: "Rose Oxide", percentage: 2, section: "top", casNumber: "16409-43-1" },
+    ],
+  },
+  {
     id: "acc-rose",
     name: "Rose Accord",
     category: "rose",

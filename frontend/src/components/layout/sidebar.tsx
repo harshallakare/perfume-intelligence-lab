@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  LayoutDashboard, FlaskConical, Copy, BookOpen, Package,
+  LayoutDashboard, FlaskConical, Copy, BookOpen, Package, Box,
   Factory, ShieldCheck, BarChart3, Sparkles, Layers,
   Users, Settings, Brain, DollarSign, ChevronRight,
 } from "lucide-react";
@@ -46,6 +46,7 @@ const NAV: NavGroup[] = [
     section: "Operations",
     items: [
       { label: "Inventory", href: "/inventory", icon: Package },
+      { label: "Packaging", href: "/packaging", icon: Box },
       { label: "Production", href: "/production", icon: Factory },
       { label: "IFRA Compliance", href: "/compliance", icon: ShieldCheck },
     ],

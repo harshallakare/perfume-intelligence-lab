@@ -381,6 +381,40 @@ async function main() {
   } else {
     console.log(`Library already has ${existingLibraryCount} entries — skipping seed`)
   }
+
+  // ── Packaging & Supplies (non-consumables) ─────────────────────────────
+  const packagingDefs = [
+    { name: "3mL Sample Vial (Clear)",     itemType: "vial",    capacityMl: 3,   unitPrice: 0.15, currentStock: 500, minimumStock: 100, supplierName: "Glassmark" },
+    { name: "10mL Roll-on (Amber)",        itemType: "roller",  capacityMl: 10,  unitPrice: 0.45, currentStock: 240, minimumStock: 50,  supplierName: "Glassmark" },
+    { name: "30mL Spray Bottle (Frosted)", itemType: "bottle",  capacityMl: 30,  unitPrice: 0.95, currentStock: 180, minimumStock: 40,  supplierName: "Glassmark" },
+    { name: "50mL Spray Bottle (Clear)",   itemType: "bottle",  capacityMl: 50,  unitPrice: 1.25, currentStock: 120, minimumStock: 30,  supplierName: "Glassmark" },
+    { name: "100mL Spray Bottle (Heavy)",  itemType: "bottle",  capacityMl: 100, unitPrice: 2.10, currentStock: 60,  minimumStock: 20,  supplierName: "Lux Glass" },
+    { name: "Gold Crimp Spray Pump",       itemType: "pump",    capacityMl: null, unitPrice: 0.30, currentStock: 400, minimumStock: 100, supplierName: "Coverpla" },
+    { name: "Magnetic Cap (Gold)",         itemType: "cap",     capacityMl: null, unitPrice: 0.55, currentStock: 350, minimumStock: 80,  supplierName: "Coverpla" },
+    { name: "Folding Carton + Insert",     itemType: "box",     capacityMl: null, unitPrice: 0.85, currentStock: 200, minimumStock: 50,  supplierName: "PrintPack" },
+    { name: "Front Label (Foil)",          itemType: "label",   capacityMl: null, unitPrice: 0.08, currentStock: 1000, minimumStock: 200, supplierName: "PrintPack" },
+  ]
+  const existingPkgCount = await prisma.packagingItem.count({ where: { organizationId: org.id } })
+  if (existingPkgCount === 0) {
+    for (const p of packagingDefs) {
+      await prisma.packagingItem.create({
+        data: {
+          organizationId: org.id,
+          name: p.name,
+          itemType: p.itemType,
+          capacityMl: p.capacityMl,
+          unitPrice: p.unitPrice,
+          currency: 'USD',
+          currentStock: p.currentStock,
+          minimumStock: p.minimumStock,
+          supplierName: p.supplierName,
+        },
+      })
+    }
+    console.log(`Seeded ${packagingDefs.length} packaging items`)
+  } else {
+    console.log(`Packaging already has ${existingPkgCount} items — skipping seed`)
+  }
 }
 
 main().catch(console.error).finally(() => prisma.$disconnect())
