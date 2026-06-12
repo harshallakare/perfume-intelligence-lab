@@ -14,7 +14,14 @@ export async function GET() {
       where: { organizationId: org.id },
       orderBy: { createdAt: 'desc' },
     })
-    return NextResponse.json(goods.map(dbToApi))
+    // Revenue realised per lot = sum of non-cancelled order line totals
+    const revenue = await prisma.orderLine.groupBy({
+      by: ['finishedGoodId'],
+      where: { finishedGoodId: { in: goods.map((g) => g.id) }, order: { status: { not: 'cancelled' } } },
+      _sum: { lineTotal: true, quantity: true },
+    })
+    const revMap = new Map(revenue.map((r) => [r.finishedGoodId, r]))
+    return NextResponse.json(goods.map((g) => dbToApi(g, revMap.get(g.id))))
   } catch (err) {
     console.error('[GET /api/finished-goods]', err)
     return NextResponse.json({ error: 'Failed to fetch finished goods' }, { status: 500 })
@@ -52,12 +59,17 @@ export async function POST(req: NextRequest) {
         bottleSizeMl: body.bottle_size_ml ?? 0,
         bottlesFilled,
         bottlesUsed,
+        plannedBottles: body.planned_bottles ?? null,
         leftoverMl: body.leftover_ml ?? 0,
         oilMl: body.oil_ml ?? 0,
         alcoholMl: body.alcohol_ml ?? 0,
         fixativeMl: body.fixative_ml ?? 0,
+        materialCost: body.material_cost ?? null,
+        packagingCost: body.packaging_cost ?? null,
+        laborCost: body.labor_cost ?? null,
         unitCost: body.unit_cost ?? null,
         batchCost: body.batch_cost ?? null,
+        sellPrice: body.sell_price ?? null,
         packagingId: body.packaging_id ?? null,
         notes: body.notes ?? null,
       },
@@ -70,7 +82,7 @@ export async function POST(req: NextRequest) {
   }
 }
 
-export function dbToApi(g: any) {
+export function dbToApi(g: any, rev?: { _sum: { lineTotal: number | null; quantity: number | null } }) {
   return {
     id: g.id,
     organization_id: g.organizationId,
@@ -78,16 +90,25 @@ export function dbToApi(g: any) {
     perfume_type: g.perfumeType,
     batch_volume_ml: g.batchVolumeMl,
     bottle_size_ml: g.bottleSizeMl,
+    planned_bottles: g.plannedBottles,
     bottles_filled: g.bottlesFilled,
     bottles_used: g.bottlesUsed,
+    bottles_sold: g.bottlesSold ?? 0,
     leftover_ml: g.leftoverMl,
     oil_ml: g.oilMl,
     alcohol_ml: g.alcoholMl,
     fixative_ml: g.fixativeMl,
+    material_cost: g.materialCost,
+    packaging_cost: g.packagingCost,
+    labor_cost: g.laborCost,
     unit_cost: g.unitCost,
     batch_cost: g.batchCost,
+    sell_price: g.sellPrice,
     packaging_id: g.packagingId,
     notes: g.notes,
+    revenue: rev?._sum.lineTotal ?? 0,
+    qty_sold_orders: rev?._sum.quantity ?? 0,
     created_at: g.createdAt?.toISOString() ?? '',
+    updated_at: g.updatedAt?.toISOString() ?? '',
   }
 }

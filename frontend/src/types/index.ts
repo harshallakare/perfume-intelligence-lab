@@ -75,17 +75,85 @@ export interface FinishedGood {
   perfume_type: string;
   batch_volume_ml: number;
   bottle_size_ml: number;
+  planned_bottles?: number | null;
   bottles_filled: number;
   bottles_used: number;
+  bottles_sold: number;
   leftover_ml: number;
   oil_ml: number;
   alcohol_ml: number;
   fixative_ml: number;
+  material_cost?: number | null;
+  packaging_cost?: number | null;
+  labor_cost?: number | null;
   unit_cost?: number | null;
   batch_cost?: number | null;
+  sell_price?: number | null;
   packaging_id?: string | null;
   notes?: string | null;
+  revenue?: number;
+  qty_sold_orders?: number;
   created_at: string;
+  updated_at?: string;
+}
+
+export type CustomerType = "retail" | "wholesale" | "distributor" | "online";
+
+export interface Customer {
+  id: string;
+  organization_id: string;
+  name: string;
+  type: CustomerType;
+  email?: string | null;
+  phone?: string | null;
+  company?: string | null;
+  gstin?: string | null;
+  address?: string | null;
+  city?: string | null;
+  notes?: string | null;
+  order_count: number;
+  total_spend: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export type OrderStatus = "draft" | "confirmed" | "fulfilled" | "cancelled";
+export type PaymentStatus = "unpaid" | "partial" | "paid";
+
+export interface OrderLine {
+  id?: string;
+  finished_good_id?: string | null;
+  description: string;
+  quantity: number;
+  unit_price: number;
+  unit_cost: number;
+  line_total: number;
+}
+
+export interface Order {
+  id: string;
+  organization_id: string;
+  customer_id?: string | null;
+  customer_name?: string | null;
+  order_number: string;
+  status: OrderStatus;
+  channel: string;
+  order_date: string;
+  subtotal: number;
+  discount_amount: number;
+  tax_pct: number;
+  tax_amount: number;
+  total: number;
+  cogs: number;
+  profit: number;
+  amount_paid: number;
+  payment_status: PaymentStatus;
+  stock_applied: boolean;
+  notes?: string | null;
+  line_count: number;
+  lines?: OrderLine[];
+  created_at: string;
+  updated_at: string;
 }
 
 export interface FormulaIngredient {

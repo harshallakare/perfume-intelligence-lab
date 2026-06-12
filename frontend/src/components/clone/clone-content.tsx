@@ -336,6 +336,7 @@ export function CloneContent() {
   const [packaging, setPackaging] = useState<PackagingItem[]>([]);
   const [bottleSku, setBottleSku] = useState<string>("");      // packaging id, or "" for manual
   const [manualBottle, setManualBottle] = useState<number>(10);
+  const [oilCostPerMl, setOilCostPerMl] = useState<number>(0); // fragrance-oil cost, for COGS
   const [batchName, setBatchName] = useState("");
   const [committing, setCommitting] = useState(false);
   const [commitMsg, setCommitMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
@@ -394,6 +395,11 @@ export function CloneContent() {
   ];
   const doneCount = checklistRows.filter((r) => checked[r.key]).length;
 
+  // COGS for the committed batch
+  const materialCost = parseFloat((blend.oil * oilCostPerMl).toFixed(2));
+  const packagingCost = parseFloat((bottlesUsable * (selectedPkg?.unit_price ?? 0)).toFixed(2));
+  const batchCostTotal = parseFloat((materialCost + packagingCost).toFixed(2));
+
   const handleCommit = async () => {
     setCommitting(true); setCommitMsg(null);
     try {
@@ -405,11 +411,16 @@ export function CloneContent() {
           perfume_type: perfumeType,
           batch_volume_ml: effectiveQty,
           bottle_size_ml: bottleSize,
+          planned_bottles: bottlesFilled,
           bottles_filled: bottlesUsable,
           leftover_ml: leftoverMl,
           oil_ml: blend.oil,
           alcohol_ml: blend.alcohol,
           fixative_ml: blend.fixativeTotal,
+          material_cost: materialCost || null,
+          packaging_cost: packagingCost || null,
+          batch_cost: batchCostTotal || null,
+          unit_cost: bottlesUsable > 0 && batchCostTotal > 0 ? parseFloat((batchCostTotal / bottlesUsable).toFixed(2)) : null,
           packaging_id: selectedPkg?.id ?? null,
         }),
       });
@@ -1093,6 +1104,24 @@ export function CloneContent() {
                   <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 13px", background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.25)", borderRadius: 8, marginBottom: 14, fontSize: 12, color: "#fca5a5" }}>
                     <AlertTriangle size={13} />
                     <span>Short by <strong>{stockShort}</strong> bottle{stockShort !== 1 ? "s" : ""} — only {selectedPkg!.current_stock} in stock. {bottlesUsable} will be committed.</span>
+                  </div>
+                )}
+
+                {/* Cost capture (optional) → feeds Products pricing & margins */}
+                {bottleSize > 0 && (
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 12, alignItems: "center", marginBottom: 14, padding: "10px 14px", borderRadius: 8, background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)" }}>
+                    <div>
+                      <div style={{ fontSize: 11, color: "rgba(255,255,255,0.45)", marginBottom: 6 }}>Fragrance oil cost ({sym}/mL) <span style={{ color: "rgba(255,255,255,0.3)" }}>— optional, for COGS</span></div>
+                      <input className="input-base" type="number" min={0} step={0.1} value={oilCostPerMl || ""} placeholder="e.g. 4.5" onChange={(e) => setOilCostPerMl(parseFloat(e.target.value) || 0)} style={{ maxWidth: 160 }} />
+                    </div>
+                    {batchCostTotal > 0 && (
+                      <div style={{ textAlign: "right" }}>
+                        <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)" }}>Batch cost · per bottle</div>
+                        <div style={{ fontSize: 15, fontWeight: 800, color: "#c9a84c", fontFamily: "Georgia, serif" }}>
+                          {sym}{batchCostTotal.toFixed(2)} · {sym}{bottlesUsable > 0 ? (batchCostTotal / bottlesUsable).toFixed(2) : "0"}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
 

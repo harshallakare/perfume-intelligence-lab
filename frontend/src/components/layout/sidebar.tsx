@@ -6,6 +6,7 @@ import {
   LayoutDashboard, FlaskConical, Copy, BookOpen, Package, Box,
   Factory, ShieldCheck, BarChart3, Sparkles, Layers,
   Users, Settings, Brain, DollarSign, ChevronRight,
+  ShoppingCart, Contact, Tags,
 } from "lucide-react";
 
 interface NavItem {
@@ -49,6 +50,14 @@ const NAV: NavGroup[] = [
       { label: "Packaging", href: "/packaging", icon: Box },
       { label: "Production", href: "/production", icon: Factory },
       { label: "IFRA Compliance", href: "/compliance", icon: ShieldCheck },
+    ],
+  },
+  {
+    section: "Sales",
+    items: [
+      { label: "Orders", href: "/orders", icon: ShoppingCart },
+      { label: "Customers", href: "/customers", icon: Contact },
+      { label: "Products", href: "/products", icon: Tags },
     ],
   },
   {
