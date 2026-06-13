@@ -698,6 +698,7 @@ export function InventoryContent() {
   const [deleteTarget,    setDeleteTarget]    = useState<RawMaterial | null>(null);
   const [deleteError,     setDeleteError]     = useState<string | null>(null);
   const [deleteLoading,   setDeleteLoading]   = useState(false);
+  const [canForce,        setCanForce]        = useState(false);
 
   // Fetch from DB on mount
   useEffect(() => {
@@ -766,19 +767,28 @@ export function InventoryContent() {
     }
   };
 
-  const handleDelete = async () => {
+  const handleDelete = async (force = false) => {
     if (!deleteTarget) return;
     setDeleteLoading(true);
     setDeleteError(null);
     try {
-      const res = await fetch(`/api/materials/${deleteTarget.id}`, { method: "DELETE" });
+      const url = `/api/materials/${deleteTarget.id}${force ? "?force=true" : ""}`;
+      const res = await fetch(url, { method: "DELETE" });
       if (!res.ok) {
         const body = await res.json().catch(() => ({ error: "Failed to delete material" }));
-        setDeleteError(body.error ?? "Failed to delete material");
+        // 409 = in use; offer force delete
+        if (res.status === 409 && body.canForce) {
+          setCanForce(true);
+          setDeleteError(`${body.error} Force delete will also remove it from those formulas.`);
+        } else {
+          setCanForce(false);
+          setDeleteError(body.error ?? "Failed to delete material");
+        }
         return;
       }
       setMaterials(ms => ms.filter(m => m.id !== deleteTarget.id));
       setDeleteTarget(null);
+      setCanForce(false);
     } catch {
       setDeleteError("Failed to delete material. Please try again.");
     } finally {
@@ -977,7 +987,7 @@ export function InventoryContent() {
                       <button className="btn-ghost" style={{ padding:"4px 8px" }} title="Edit"
                         onClick={() => setEditTarget(m)}><Edit2 size={13} /></button>
                       <button className="btn-ghost" style={{ padding:"4px 8px",color:"rgba(239,68,68,0.5)" }} title="Delete"
-                        onClick={() => { setDeleteTarget(m); setDeleteError(null); }}><Trash2 size={13} /></button>
+                        onClick={() => { setDeleteTarget(m); setDeleteError(null); setCanForce(false); }}><Trash2 size={13} /></button>
                     </div>
                   </td>
                 </tr>
@@ -1069,24 +1079,32 @@ export function InventoryContent() {
             <div style={{ padding: "0 24px 20px", display: "flex", gap: 10, justifyContent: "flex-end" }}>
               <button
                 className="btn-secondary"
-                onClick={() => { setDeleteTarget(null); setDeleteError(null); }}
+                onClick={() => { setDeleteTarget(null); setDeleteError(null); setCanForce(false); }}
                 disabled={deleteLoading}
               >
                 Cancel
               </button>
-              <button
-                className="btn-primary"
-                style={{
-                  background: "rgba(239,68,68,0.15)",
-                  border: "1px solid rgba(239,68,68,0.4)",
-                  color: "#ef4444",
-                }}
-                onClick={handleDelete}
-                disabled={deleteLoading}
-              >
-                <Trash2 size={13} />
-                {deleteLoading ? "Deleting…" : "Delete"}
-              </button>
+              {canForce ? (
+                <button
+                  className="btn-primary"
+                  style={{ background: "rgba(239,68,68,0.2)", border: "1px solid rgba(239,68,68,0.55)", color: "#ef4444" }}
+                  onClick={() => handleDelete(true)}
+                  disabled={deleteLoading}
+                >
+                  <Trash2 size={13} />
+                  {deleteLoading ? "Deleting…" : "Force Delete"}
+                </button>
+              ) : (
+                <button
+                  className="btn-primary"
+                  style={{ background: "rgba(239,68,68,0.15)", border: "1px solid rgba(239,68,68,0.4)", color: "#ef4444" }}
+                  onClick={() => handleDelete(false)}
+                  disabled={deleteLoading}
+                >
+                  <Trash2 size={13} />
+                  {deleteLoading ? "Deleting…" : "Delete"}
+                </button>
+              )}
             </div>
           </div>
         </div>

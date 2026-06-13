@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Factory, Clock, CheckCircle, AlertCircle, Play, Pause, Package, FlaskConical, QrCode, Loader2 } from "lucide-react";
+import { Factory, Clock, CheckCircle, AlertCircle, Play, Pause, Package, FlaskConical, QrCode, Loader2, Trash2 } from "lucide-react";
 
 interface ProductionOrder {
   id: string;
@@ -53,6 +53,27 @@ export function ProductionContent() {
   const [orders, setOrders] = useState<ProductionOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<ProductionOrder | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<ProductionOrder | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/productions/${deleteTarget.id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error(await res.text());
+      setOrders((os) => {
+        const next = os.filter((o) => o.id !== deleteTarget.id);
+        setSelected((sel) => (sel?.id === deleteTarget.id ? next[0] ?? null : sel));
+        return next;
+      });
+      setDeleteTarget(null);
+    } catch (e) {
+      console.error("Failed to delete production order:", e);
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   useEffect(() => {
     fetch("/api/productions")
@@ -235,6 +256,14 @@ export function ProductionContent() {
                 <button className="btn-ghost" style={{ flex: 1, justifyContent: "center" }}>
                   <Package size={13} /> Log Batch
                 </button>
+                <button
+                  className="btn-ghost"
+                  style={{ justifyContent: "center", color: "rgba(239,68,68,0.7)" }}
+                  title="Delete order"
+                  onClick={() => setDeleteTarget(selected)}
+                >
+                  <Trash2 size={13} />
+                </button>
               </div>
             </div>
 
@@ -290,6 +319,32 @@ export function ProductionContent() {
           </div>
         )}
       </div>
+
+      {/* Delete confirmation */}
+      {deleteTarget && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 1100, background: "rgba(0,0,0,0.75)", backdropFilter: "blur(6px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+          <div className="glass-elevated" style={{ width: "100%", maxWidth: 420, padding: 24 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
+              <div style={{ width: 36, height: 36, borderRadius: 8, flexShrink: 0, background: "rgba(239,68,68,0.12)", border: "1px solid rgba(239,68,68,0.3)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <Trash2 size={16} color="#ef4444" />
+              </div>
+              <div>
+                <div style={{ fontSize: 15, fontWeight: 700, color: "#fff" }}>Delete Production Order</div>
+                <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)" }}>This action cannot be undone</div>
+              </div>
+            </div>
+            <p style={{ fontSize: 13, color: "rgba(255,255,255,0.65)", lineHeight: 1.6, margin: 0 }}>
+              Delete order <span style={{ color: "#fff", fontWeight: 600, fontFamily: "monospace" }}>{deleteTarget.order_number}</span> ({deleteTarget.formula_name})?
+            </p>
+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 18 }}>
+              <button className="btn-secondary" onClick={() => setDeleteTarget(null)} disabled={deleting}>Cancel</button>
+              <button className="btn-primary" style={{ background: "rgba(239,68,68,0.15)", border: "1px solid rgba(239,68,68,0.4)", color: "#ef4444" }} onClick={handleDelete} disabled={deleting}>
+                <Trash2 size={13} /> {deleting ? "Deleting…" : "Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

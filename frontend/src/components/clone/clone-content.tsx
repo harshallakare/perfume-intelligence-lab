@@ -6,7 +6,20 @@ import {
   Layers, Package, Boxes, Check, Square, CheckSquare, Loader2, AlertTriangle,
 } from "lucide-react";
 import { useSettings } from "@/context/settings-context";
-import type { PackagingItem } from "@/types";
+import { normalizedCost } from "@/lib/utils";
+import type { PackagingItem, RawMaterial } from "@/types";
+
+// Convert an oil volume (mL) into the quantity to deduct in a material's own unit.
+function oilDeductInUnit(ml: number, unit: string, density?: number | null): number {
+  const d = density && density > 0 ? density : 0.9; // typical fragrance-oil density
+  const u = (unit || "g").toLowerCase();
+  if (u === "ml") return ml;
+  if (u === "l")  return ml / 1000;
+  if (u === "g")  return ml * d;
+  if (u === "kg") return (ml * d) / 1000;
+  if (u === "oz") return (ml * d) / 28.3495;
+  return ml * d;
+}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -334,8 +347,10 @@ export function CloneContent() {
 
   // Export to stock
   const [packaging, setPackaging] = useState<PackagingItem[]>([]);
+  const [materials, setMaterials] = useState<RawMaterial[]>([]);
   const [bottleSku, setBottleSku] = useState<string>("");      // packaging id, or "" for manual
   const [manualBottle, setManualBottle] = useState<number>(10);
+  const [oilMaterialId, setOilMaterialId] = useState<string>(""); // raw material id, or "" for manual
   const [oilCostPerMl, setOilCostPerMl] = useState<number>(0); // fragrance-oil cost, for COGS
   const [batchName, setBatchName] = useState("");
   const [committing, setCommitting] = useState(false);
@@ -346,7 +361,21 @@ export function CloneContent() {
       .then((r) => r.json())
       .then((d) => setPackaging(Array.isArray(d) ? d : []))
       .catch(() => {});
+    fetch("/api/materials")
+      .then((r) => r.json())
+      .then((d) => setMaterials(Array.isArray(d) ? d : []))
+      .catch(() => {});
   }, []);
+
+  // When an inventory oil is chosen, auto-fill its per-mL cost
+  const handleOilMaterialChange = (id: string) => {
+    setOilMaterialId(id);
+    const mat = materials.find((m) => m.id === id);
+    if (mat) {
+      const perMl = normalizedCost(mat.cost_per_unit, mat.unit_of_measure, mat.density).perMl;
+      if (perMl != null) setOilCostPerMl(parseFloat(perMl.toFixed(4)));
+    }
+  };
 
   const effectiveQty = isCustom ? parseFloat(customQty) || 0 : quantity;
   const cfg = TYPE_CONFIGS[perfumeType];
@@ -395,6 +424,14 @@ export function CloneContent() {
   ];
   const doneCount = checklistRows.filter((r) => checked[r.key]).length;
 
+  // ── Oil source (from inventory) ──
+  const selectedOilMaterial = materials.find((m) => m.id === oilMaterialId) ?? null;
+  const oilDeductQty = selectedOilMaterial
+    ? parseFloat(oilDeductInUnit(blend.oil, selectedOilMaterial.unit_of_measure, selectedOilMaterial.density).toFixed(3))
+    : 0;
+  const oilUnit = selectedOilMaterial?.unit_of_measure ?? "";
+  const oilShort = selectedOilMaterial ? oilDeductQty > selectedOilMaterial.current_stock : false;
+
   // COGS for the committed batch
   const materialCost = parseFloat((blend.oil * oilCostPerMl).toFixed(2));
   const packagingCost = parseFloat((bottlesUsable * (selectedPkg?.unit_price ?? 0)).toFixed(2));
@@ -422,6 +459,8 @@ export function CloneContent() {
           batch_cost: batchCostTotal || null,
           unit_cost: bottlesUsable > 0 && batchCostTotal > 0 ? parseFloat((batchCostTotal / bottlesUsable).toFixed(2)) : null,
           packaging_id: selectedPkg?.id ?? null,
+          oil_material_id: selectedOilMaterial?.id ?? null,
+          oil_deduct_qty: oilDeductQty || null,
         }),
       });
       const data = await res.json();
@@ -430,7 +469,12 @@ export function CloneContent() {
       if (selectedPkg && data.bottles_used) {
         setPackaging((ps) => ps.map((p) => p.id === selectedPkg.id ? { ...p, current_stock: p.current_stock - data.bottles_used } : p));
       }
-      setCommitMsg({ type: "ok", text: `Committed ${bottlesUsable} × ${bottleSize}ml bottle${bottlesUsable !== 1 ? "s" : ""} to stock${data.bottles_used ? ` · ${data.bottles_used} bottles deducted from supplies` : ""}.` });
+      // Reflect oil-material decrement locally
+      if (selectedOilMaterial && data.oil_deducted) {
+        setMaterials((ms) => ms.map((m) => m.id === selectedOilMaterial.id ? { ...m, current_stock: m.current_stock - data.oil_deducted } : m));
+      }
+      const oilMsg = selectedOilMaterial && data.oil_deducted ? ` · ${data.oil_deducted}${oilUnit} of ${selectedOilMaterial.name} deducted from inventory` : "";
+      setCommitMsg({ type: "ok", text: `Committed ${bottlesUsable} × ${bottleSize}ml bottle${bottlesUsable !== 1 ? "s" : ""} to stock${data.bottles_used ? ` · ${data.bottles_used} bottles deducted from supplies` : ""}${oilMsg}.` });
     } catch (e: any) {
       setCommitMsg({ type: "err", text: e.message });
     } finally {
@@ -1107,11 +1151,36 @@ export function CloneContent() {
                   </div>
                 )}
 
+                {/* Oil source — draw the fragrance oil from inventory (deducts on commit) */}
+                {bottleSize > 0 && (
+                  <div style={{ marginBottom: 14, padding: "10px 14px", borderRadius: 8, background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)" }}>
+                    <div style={{ fontSize: 11, color: "rgba(255,255,255,0.45)", marginBottom: 6 }}>
+                      Oil source <span style={{ color: "rgba(255,255,255,0.3)" }}>— pick a material to auto-deduct {blend.oil}ml of oil from inventory</span>
+                    </div>
+                    <select className="select-base" value={oilMaterialId} onChange={(e) => handleOilMaterialChange(e.target.value)}>
+                      <option value="">Manual / not tracked in inventory</option>
+                      {materials.map((m) => (
+                        <option key={m.id} value={m.id}>{m.name} — {m.current_stock}{m.unit_of_measure} in stock</option>
+                      ))}
+                    </select>
+                    {selectedOilMaterial && (
+                      <div style={{ marginTop: 8, fontSize: 12, display: "flex", alignItems: "center", gap: 8, color: oilShort ? "#fca5a5" : "rgba(255,255,255,0.55)" }}>
+                        {oilShort && <AlertTriangle size={13} />}
+                        <span>
+                          Will deduct <strong style={{ color: oilShort ? "#fca5a5" : "#c9a84c" }}>{oilDeductQty}{oilUnit}</strong>
+                          {" "}from {selectedOilMaterial.name} ({selectedOilMaterial.current_stock}{oilUnit} in stock)
+                          {oilShort ? " — insufficient stock, will be capped." : ""}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {/* Cost capture (optional) → feeds Products pricing & margins */}
                 {bottleSize > 0 && (
                   <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 12, alignItems: "center", marginBottom: 14, padding: "10px 14px", borderRadius: 8, background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)" }}>
                     <div>
-                      <div style={{ fontSize: 11, color: "rgba(255,255,255,0.45)", marginBottom: 6 }}>Fragrance oil cost ({sym}/mL) <span style={{ color: "rgba(255,255,255,0.3)" }}>— optional, for COGS</span></div>
+                      <div style={{ fontSize: 11, color: "rgba(255,255,255,0.45)", marginBottom: 6 }}>Fragrance oil cost ({sym}/mL) <span style={{ color: "rgba(255,255,255,0.3)" }}>{selectedOilMaterial ? "— auto-filled from inventory" : "— optional, for COGS"}</span></div>
                       <input className="input-base" type="number" min={0} step={0.1} value={oilCostPerMl || ""} placeholder="e.g. 4.5" onChange={(e) => setOilCostPerMl(parseFloat(e.target.value) || 0)} style={{ maxWidth: 160 }} />
                     </div>
                     {batchCostTotal > 0 && (

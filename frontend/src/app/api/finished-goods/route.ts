@@ -50,6 +50,19 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Decrement raw-material stock if the fragrance oil was drawn from inventory
+    let oilDeducted = 0
+    if (body.oil_material_id && (body.oil_deduct_qty ?? 0) > 0) {
+      const mat = await prisma.rawMaterial.findUnique({ where: { id: body.oil_material_id } })
+      if (mat && mat.organizationId === org.id) {
+        oilDeducted = Math.min(body.oil_deduct_qty, mat.currentStock)
+        await prisma.rawMaterial.update({
+          where: { id: mat.id },
+          data: { currentStock: mat.currentStock - oilDeducted },
+        })
+      }
+    }
+
     const good = await prisma.finishedGood.create({
       data: {
         organizationId: org.id,
@@ -75,7 +88,7 @@ export async function POST(req: NextRequest) {
       },
     })
 
-    return NextResponse.json({ ...dbToApi(good), bottles_used: bottlesUsed }, { status: 201 })
+    return NextResponse.json({ ...dbToApi(good), bottles_used: bottlesUsed, oil_deducted: oilDeducted }, { status: 201 })
   } catch (err) {
     console.error('[POST /api/finished-goods]', err)
     return NextResponse.json({ error: 'Failed to commit finished good' }, { status: 500 })

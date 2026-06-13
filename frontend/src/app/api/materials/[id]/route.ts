@@ -51,17 +51,32 @@ export async function PUT(req: NextRequest, ctx: RouteContext<'/api/materials/[i
   }
 }
 
-export async function DELETE(_req: NextRequest, ctx: RouteContext<'/api/materials/[id]'>) {
+export async function DELETE(req: NextRequest, ctx: RouteContext<'/api/materials/[id]'>) {
   try {
     const { id } = await ctx.params
+    const force = req.nextUrl.searchParams.get('force') === 'true'
 
-    // Check if used in any formula before deleting
     const usageCount = await prisma.formulaIngredient.count({ where: { rawMaterialId: id } })
-    if (usageCount > 0) {
+
+    if (usageCount > 0 && !force) {
+      // Block by default — but tell the client a force delete is possible
       return NextResponse.json(
-        { error: `Cannot delete — this material is used in ${usageCount} formula ingredient${usageCount > 1 ? 's' : ''}. Remove it from all formulas first.` },
+        {
+          error: `This material is used in ${usageCount} formula ingredient${usageCount > 1 ? 's' : ''}.`,
+          usageCount,
+          canForce: true,
+        },
         { status: 409 }
       )
+    }
+
+    // Force delete: remove the dependent formula ingredients first, then the material
+    if (usageCount > 0 && force) {
+      await prisma.$transaction([
+        prisma.formulaIngredient.deleteMany({ where: { rawMaterialId: id } }),
+        prisma.rawMaterial.delete({ where: { id } }),
+      ])
+      return NextResponse.json({ ok: true, removedIngredients: usageCount })
     }
 
     await prisma.rawMaterial.delete({ where: { id } })
