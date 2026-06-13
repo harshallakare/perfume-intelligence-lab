@@ -102,11 +102,12 @@ function Field({ label, required, hint, children }: {
 
 /* ─── Add / Edit modal ───────────────────────────────────────────────── */
 function MaterialModal({
-  initial, onSave, onClose,
+  initial, onSave, onClose, suppliers = [],
 }: {
   initial?: RawMaterial;
   onSave: (m: FormState) => void;
   onClose: () => void;
+  suppliers?: string[];
 }) {
   const isEdit = !!initial;
   const { sym } = useSettings();
@@ -278,13 +279,18 @@ function MaterialModal({
                 />
               </Field>
 
-              <Field label="Supplier Name" hint="optional">
+              <Field label="Supplier Name" hint="type to search or add new">
                 <input
                   className="input-base"
+                  list="supplier-suggestions"
+                  autoComplete="off"
                   placeholder="e.g. Givaudan, IFF, Symrise…"
                   value={form.supplier_name}
                   onChange={e => set("supplier_name", e.target.value)}
                 />
+                <datalist id="supplier-suggestions">
+                  {suppliers.map(s => <option key={s} value={s} />)}
+                </datalist>
               </Field>
             </div>
           )}
@@ -729,6 +735,8 @@ export function InventoryContent() {
   const lowCount   = materials.filter(m => stockStatus(m.current_stock, m.minimum_stock) === "low").length;
   const outCount   = materials.filter(m => stockStatus(m.current_stock, m.minimum_stock) === "out").length;
   const totalValue = materials.reduce((s, m) => s + m.current_stock * m.cost_per_unit, 0);
+  // Distinct supplier names already on file — power the autocomplete
+  const supplierOptions = [...new Set(materials.map(m => m.supplier_name).filter((s): s is string => !!s && s.trim() !== ""))].sort((a, b) => a.localeCompare(b));
 
   const toggleSort = (field: typeof sortField) => {
     if (sortField === field) setSortDir(d => d === "asc" ? "desc" : "asc");
@@ -1010,13 +1018,14 @@ export function InventoryContent() {
 
       {/* Modals */}
       {addOpen && (
-        <MaterialModal onSave={handleAdd} onClose={() => setAddOpen(false)} />
+        <MaterialModal onSave={handleAdd} onClose={() => setAddOpen(false)} suppliers={supplierOptions} />
       )}
       {editTarget && (
         <MaterialModal
           initial={editTarget}
           onSave={handleEdit}
           onClose={() => setEditTarget(null)}
+          suppliers={supplierOptions}
         />
       )}
       {viewTarget && !editTarget && (
